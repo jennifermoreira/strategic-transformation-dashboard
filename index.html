@@ -482,7 +482,7 @@
       </div>
       <div class="cv-right">
         <div class="cv-pulse">Collecting responses…</div>
-        <div class="cv-url">Or open: <a id="qrLinkDisplay" href="#" target="_blank"></a></div>
+        <div class="cv-url" style="display:none;"><a id="qrLinkDisplay" href="#" target="_blank"></a></div>
         <div class="cv-count-row">
           <div class="cv-count-label">Expected respondents</div>
           <input type="number" class="cv-count-input" id="expectedInputOverlay"
@@ -493,7 +493,7 @@
     </div>
 
     <!-- Bottom hint -->
-    <div class="cv-bottom">Press Ctrl+Shift+Z to load results when ready</div>
+    <div class="cv-bottom">Press <strong>Ctrl+Shift+Z</strong> for operator options &nbsp;·&nbsp; Dashboard updates automatically once live polling starts</div>
 
   </div>
 
@@ -514,31 +514,42 @@
       </div>
     </div>
 
-    <div class="steps">
-      <h4>When ready to reveal</h4>
+    <!-- Live polling status card -->
+    <div class="steps" id="liveStatusCard">
+      <h4>Live Polling Status</h4>
       <div class="step-row">
-        <div class="step-num">1</div>
-        <div class="step-text">Go to <strong>Microsoft Forms</strong> → Responses → <strong>Open in Excel</strong></div>
+        <div class="step-num" id="liveStep1Num">1</div>
+        <div class="step-text" id="liveStep1Text">Gist URL configured — <strong id="liveGistStatus">checking…</strong></div>
       </div>
       <div class="step-row">
         <div class="step-num">2</div>
-        <div class="step-text"><strong>Select all data rows</strong> (not header) → <strong>Ctrl+C</strong></div>
+        <div class="step-text">Set expected respondents above → click <strong>View Live Dashboard</strong></div>
       </div>
       <div class="step-row">
         <div class="step-num">3</div>
-        <div class="step-text">Paste below → click <strong>Reveal Results</strong></div>
+        <div class="step-text">Dashboard polls every <strong>30 seconds</strong> — charts update automatically</div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">4</div>
+        <div class="step-text" style="color:var(--muted);">Fallback: paste data manually below if internet drops</div>
       </div>
     </div>
 
-    <textarea class="paste-area" id="pasteArea"
-      placeholder="Paste Excel rows here (Ctrl+V)…"></textarea>
+    <!-- Manual fallback (collapsed by default) -->
+    <button class="skip-link" id="toggleFallbackBtn" onclick="toggleFallback()" style="margin-bottom:8px; text-decoration:none; font-weight:600; color:var(--muted);">▶ Manual fallback (paste from Excel)</button>
+    <div id="fallbackSection" style="display:none; width:100%;">
+      <div class="steps" style="margin-bottom:10px; text-align:left;">
+        <h4>Manual data load</h4>
+        <div class="step-row"><div class="step-num">1</div><div class="step-text">Forms → Responses → <strong>Open in Excel</strong></div></div>
+        <div class="step-row"><div class="step-num">2</div><div class="step-text">Select all data rows (not header) → <strong>Ctrl+C</strong></div></div>
+        <div class="step-row"><div class="step-num">3</div><div class="step-text">Paste below → click <strong>Reveal Results</strong></div></div>
+      </div>
+      <textarea class="paste-area" id="pasteArea" placeholder="Paste Excel rows here (Ctrl+V)…"></textarea>
+      <div class="paste-error" id="pasteError"></div>
+      <button class="reveal-btn" id="revealBtn" onclick="loadAndReveal()">Reveal Results</button>
+    </div>
 
-    <div class="paste-error" id="pasteError"></div>
-
-    <button class="reveal-btn" id="revealBtn" onclick="loadAndReveal()">
-      Reveal Results
-    </button>
-    <button class="skip-link" onclick="skipToEmpty()">Skip — show empty dashboard</button>
+    <button class="skip-link" onclick="skipToEmpty()" style="margin-top:10px;">Skip — show empty dashboard</button>
   </div>
 
 </div>
@@ -572,7 +583,7 @@
     <div class="stat-card">
       <div class="lbl">Responses</div>
       <div class="val" id="statTotal">—</div>
-      <div class="sub">of <span id="statExpected">40</span> expected</div>
+      <div class="sub">of <span id="statExpected">—</span> expected</div>
     </div>
     <div class="stat-card accent">
       <div class="lbl">Response Rate</div>
@@ -637,6 +648,15 @@
 </div>
 
 <script>
+// ══════════════════════════════════════════════════════════════════════════
+// CONFIGURATION — set GIST_RAW_URL after creating your GitHub Gist
+// Step-by-step setup guide is in README.md
+// ══════════════════════════════════════════════════════════════════════════
+// Replace the placeholder below with your Gist raw URL.
+// It looks like: https://gist.githubusercontent.com/jennifermoreira/XXXX/raw/responses.json
+const GIST_RAW_URL = 'https://gist.github.com/jennifermoreira/d5af05381df78b6541dee777bfc73ae8';
+const POLL_INTERVAL_MS = 30000; // poll every 30 seconds
+
 // ══ Constants ══════════════════════════════════════════════════════════════
 const ADMIN_PASSWORD = 'admin123';
 
@@ -660,6 +680,92 @@ const PRIORITY_MAP = [
 let adminUnlocked = false;
 let operatorVisible = false;
 let radarChart, priorityChart, gaugeChart;
+let pollTimer = null;
+let lastResponseCount = -1;
+
+// ══ Toggle fallback paste section ══════════════════════════════════════════
+function toggleFallback() {
+  const sec = document.getElementById('fallbackSection');
+  const btn = document.getElementById('toggleFallbackBtn');
+  const open = sec.style.display === 'none';
+  sec.style.display = open ? 'block' : 'none';
+  btn.textContent   = (open ? '▼' : '▶') + ' Manual fallback (paste from Excel)';
+}
+
+// ══ Live polling engine ════════════════════════════════════════════════════
+function gistConfigured() {
+  return GIST_RAW_URL && GIST_RAW_URL !== 'PASTE_YOUR_GIST_RAW_URL_HERE';
+}
+
+function startLivePolling() {
+  if (!gistConfigured()) return;
+  // Fetch immediately, then on interval
+  fetchGistData();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(fetchGistData, POLL_INTERVAL_MS);
+}
+
+function stopLivePolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function fetchGistData() {
+  if (!gistConfigured()) return;
+  try {
+    // Append timestamp to bust CDN cache on every poll
+    const url = GIST_RAW_URL + (GIST_RAW_URL.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    const res  = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+
+    // Expect { "responses": [ {q1,q2,q3,q4,q5}, ... ] }
+    const rows = Array.isArray(json.responses) ? json.responses : [];
+
+    if (rows.length !== lastResponseCount) {
+      lastResponseCount = rows.length;
+      if (rows.length > 0) {
+        updateDashboard(rows);
+        updatePollStatus('live', rows.length + ' responses · updated ' + new Date().toLocaleTimeString());
+      } else {
+        updatePollStatus('waiting', 'Waiting for first response…');
+      }
+    }
+  } catch (err) {
+    console.warn('Gist poll failed:', err);
+    updatePollStatus('error', 'Poll error — retrying…');
+  }
+}
+
+function updatePollStatus(state, msg) {
+  const dot = document.getElementById('statusDot');
+  const cnt = document.getElementById('responseCount');
+  if (state === 'live') {
+    dot.className = 'status-dot live';
+    dot.textContent = 'LIVE';
+  } else if (state === 'error') {
+    dot.className = 'status-dot waiting';
+    dot.textContent = 'POLL ERROR';
+  }
+  cnt.textContent = msg;
+}
+
+function checkGistOnLoad() {
+  const statusEl = document.getElementById('liveGistStatus');
+  if (!gistConfigured()) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--yellow);">⚠ Not configured — see README</span>';
+    return;
+  }
+  // Quick reachability check
+  fetch(GIST_RAW_URL + '?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
+    .then(r => {
+      if (statusEl) statusEl.innerHTML = r.ok
+        ? '<span style="color:var(--green);">✓ Connected</span>'
+        : '<span style="color:var(--red);">✗ Unreachable (HTTP ' + r.status + ')</span>';
+    })
+    .catch(() => {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--red);">✗ Network error</span>';
+    });
+}
 
 // ══ Operator panel toggle (overlay — no password, just a quick flip) ════════
 function toggleOperator() {
@@ -729,13 +835,29 @@ function hideOverlay() {
   setTimeout(() => { o.style.display = 'none'; }, 650);
 }
 function skipToEmpty() {
+  // Sync overlay expected input → admin input before hiding overlay
+  const overlayInput = document.getElementById('expectedInputOverlay');
+  const adminInput   = document.getElementById('expectedInput');
+  if (overlayInput.value) adminInput.value = overlayInput.value;
   hideOverlay();
-  setStatusLive();
+  // Start live polling as soon as the dashboard is revealed
+  if (gistConfigured()) {
+    startLivePolling();
+    setStatusPolling();
+  } else {
+    setStatusLive();
+  }
 }
 function setStatusLive() {
   const d = document.getElementById('statusDot');
   d.className = 'status-dot live';
   d.textContent = 'RESULTS LOADED';
+}
+function setStatusPolling() {
+  const d = document.getElementById('statusDot');
+  d.className = 'status-dot live';
+  d.textContent = 'LIVE';
+  document.getElementById('responseCount').textContent = 'Polling for responses…';
 }
 
 // ══ Parse pasted data ══════════════════════════════════════════════════════
@@ -838,7 +960,9 @@ function showError(msg) {
 // ══ Dashboard update ═══════════════════════════════════════════════════════
 function updateDashboard(rows) {
   const total = rows.length;
-  const expected = parseInt(document.getElementById('expectedInput').value) || 40;
+  const overlayVal = parseInt(document.getElementById('expectedInputOverlay').value);
+  const adminVal   = parseInt(document.getElementById('expectedInput').value);
+  const expected   = overlayVal || adminVal || 40;
 
   // Aggregates
   const sums = { q1: 0, q2: 0, q3: 0, q4: 0 };
@@ -967,9 +1091,12 @@ function updateGauge(score) {
 // ══ Clear ══════════════════════════════════════════════════════════════════
 function clearDashboard() {
   if (!confirm('Clear all loaded results?')) return;
+  stopLivePolling();
+  lastResponseCount = -1;
   ['statTotal','statRate','statScore','statPriority','statPriorityPct'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
+  document.getElementById('statExpected').textContent = '—';
   document.getElementById('scoreBadge').innerHTML = '';
   document.getElementById('responseCount').textContent = '0 responses loaded';
   document.getElementById('statusDot').className = 'status-dot waiting';
@@ -1035,11 +1162,14 @@ window.addEventListener('load', () => {
   makeQR('qrImgSmall', 80);    // small — operator panel
   makeQR('qrImgTopbar', 48);   // tiny  — topbar on live dashboard
 
-  // Set clickable URL link in client view
+  // Set clickable URL link in client view (display is hidden; href still set for operator panel)
   const linkEl = document.getElementById('qrLinkDisplay');
   linkEl.textContent = FORMS_URL;
   linkEl.href = FORMS_URL;
   document.getElementById('qrLinkSmall').textContent = FORMS_URL;
+
+  // Check Gist connectivity and update operator panel status
+  checkGistOnLoad();
 
   initCharts();
   window.addEventListener('resize', () => {
