@@ -182,7 +182,7 @@
     box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
   }
   .cv-url {
-    font-size: 12px; color: var(--muted); margin-bottom: 28px;
+    font-size: 11px; color: var(--muted); margin-bottom: 20px;
     word-break: break-all; max-width: 380px; line-height: 1.5;
   }
   .cv-url a { color: var(--accent); text-decoration: none; }
@@ -190,11 +190,39 @@
   .cv-pulse {
     display: flex; align-items: center; gap: 8px;
     font-size: 12px; color: var(--green); font-weight: 600;
+    margin-bottom: 24px;
   }
   .cv-pulse::before {
     content: ''; width: 8px; height: 8px; border-radius: 50%;
     background: var(--green); animation: pulse 1.4s infinite;
   }
+
+  /* Respondent count row on client view */
+  .cv-count-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 18px; margin-bottom: 16px;
+    width: 100%; max-width: 400px; justify-content: center;
+  }
+  .cv-count-label { font-size: 13px; color: var(--text); font-weight: 500; }
+  .cv-count-input {
+    background: var(--bg); border: 2px solid var(--accent);
+    color: var(--text); border-radius: 6px;
+    padding: 6px 10px; font-size: 20px; font-weight: 700;
+    width: 80px; text-align: center;
+  }
+  .cv-count-input:focus { outline: none; border-color: #60a5fa; }
+  .cv-count-input::placeholder { font-size: 13px; font-weight: 400; color: var(--muted); }
+
+  /* View Live Dashboard button */
+  .cv-dashboard-btn {
+    background: transparent; color: var(--accent);
+    border: 2px solid var(--accent); border-radius: 8px;
+    padding: 11px 28px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+    width: 100%; max-width: 400px;
+  }
+  .cv-dashboard-btn:hover { background: var(--accent); color: #fff; }
 
   /* ── OPERATOR PANEL (hidden until Ctrl+Shift+Z) ── */
   .operator-panel {
@@ -393,12 +421,22 @@
     <h2>We'd love to hear from you</h2>
     <div class="cv-sub">Scan the QR code below to answer 5 quick questions before we begin.<br>No right or wrong answers — just share what comes to mind.</div>
     <div class="cv-qr-wrap">
-      <canvas id="qrCanvas"></canvas>
+      <img id="qrImg" alt="QR Code" style="width:200px;height:200px;display:block;">
     </div>
     <div class="cv-url">
       Or open: <a id="qrLinkDisplay" href="#" target="_blank"></a>
     </div>
     <div class="cv-pulse">Collecting responses…</div>
+
+    <!-- Respondent count — set before revealing -->
+    <div class="cv-count-row">
+      <span class="cv-count-label">Number of respondents expected:</span>
+      <input type="number" class="cv-count-input" id="expectedInputOverlay"
+             value="" min="1" max="200" placeholder="Enter number">
+    </div>
+
+    <!-- View live dashboard button -->
+    <button class="cv-dashboard-btn" onclick="skipToEmpty()">View Live Dashboard →</button>
   </div>
 
   <!-- ── OPERATOR PANEL (hidden — press Ctrl+Shift+Z to access) ── -->
@@ -408,16 +446,9 @@
       <button class="op-close" onclick="toggleOperator()">✕ Close</button>
     </div>
 
-    <!-- Expected respondents -->
-    <div class="expected-row">
-      <label class="expected-label" for="expectedInputOverlay">Expected respondents:</label>
-      <input type="number" class="expected-input" id="expectedInputOverlay"
-             value="40" min="1" max="200" placeholder="e.g. 25">
-    </div>
-
     <!-- Small QR reminder -->
     <div class="qr-panel">
-      <canvas id="qrCanvasSmall"></canvas>
+      <img id="qrImgSmall" alt="QR" style="width:80px;height:80px;border-radius:4px;">
       <div class="qr-info">
         <div class="qr-label">Form URL</div>
         <div class="qr-hint">Share this with attendees</div>
@@ -531,7 +562,7 @@
 <!-- ══ ADMIN BAR ══ -->
 <div class="admin-bar" id="adminBar">
   <span>Expected attendees:</span>
-  <input type="number" class="att-input" id="expectedInput" value="40" min="1" max="200">
+  <input type="number" class="att-input" id="expectedInput" value="" min="1" max="200" placeholder="—">
   <div class="spacer"></div>
   <button class="btn-sm" onclick="showOverlay()">↩ Re-load Responses</button>
   <button class="btn-sm danger" onclick="clearDashboard()">Clear Dashboard</button>
@@ -898,23 +929,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ══ Init ═══════════════════════════════════════════════════════════════════
 window.addEventListener('load', () => {
-  // Large QR code for client-facing view
-  QRCode.toCanvas(document.getElementById('qrCanvas'), FORMS_URL, {
-    width: 200,
-    margin: 1,
+
+  // Generate QR as data URL (works on GitHub Pages, no canvas visibility issues)
+  QRCode.toDataURL(FORMS_URL, {
+    width: 200, margin: 1,
     color: { dark: '#000000', light: '#ffffff' }
+  }, (err, url) => {
+    if (!err) {
+      document.getElementById('qrImg').src = url;
+    }
   });
+
+  // Small QR for operator panel
+  QRCode.toDataURL(FORMS_URL, {
+    width: 80, margin: 1,
+    color: { dark: '#000000', light: '#ffffff' }
+  }, (err, url) => {
+    if (!err) {
+      document.getElementById('qrImgSmall').src = url;
+    }
+  });
+
   // Set clickable URL link in client view
   const linkEl = document.getElementById('qrLinkDisplay');
   linkEl.textContent = FORMS_URL;
   linkEl.href = FORMS_URL;
-
-  // Small QR code for operator panel
-  QRCode.toCanvas(document.getElementById('qrCanvasSmall'), FORMS_URL, {
-    width: 80,
-    margin: 1,
-    color: { dark: '#000000', light: '#ffffff' }
-  });
   document.getElementById('qrLinkSmall').textContent = FORMS_URL;
 
   initCharts();
