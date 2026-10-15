@@ -157,20 +157,70 @@
   }
   .overlay.hidden { opacity: 0; pointer-events: none; }
 
-  .wait-box {
+  /* ── CLIENT VIEW (default) ── */
+  .client-view {
+    text-align: center; max-width: 540px;
+    padding: 0 24px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .client-view .cv-eyebrow {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 12px; font-weight: 600;
+  }
+  .client-view h2 {
+    font-size: 26px; font-weight: 700; color: var(--text);
+    margin-bottom: 10px; line-height: 1.3;
+  }
+  .client-view .cv-sub {
+    font-size: 14px; color: var(--muted); line-height: 1.7;
+    margin-bottom: 32px; max-width: 400px;
+  }
+  /* Large QR code for client view */
+  .cv-qr-wrap {
+    background: #fff; border-radius: 12px;
+    padding: 12px; margin-bottom: 20px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+  }
+  .cv-url {
+    font-size: 12px; color: var(--muted); margin-bottom: 28px;
+    word-break: break-all; max-width: 380px; line-height: 1.5;
+  }
+  .cv-url a { color: var(--accent); text-decoration: none; }
+  .cv-url a:hover { text-decoration: underline; }
+  .cv-pulse {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--green); font-weight: 600;
+  }
+  .cv-pulse::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); animation: pulse 1.4s infinite;
+  }
+
+  /* ── OPERATOR PANEL (hidden until Ctrl+Shift+Z) ── */
+  .operator-panel {
+    display: none;
     text-align: center; max-width: 600px;
     padding: 0 24px;
   }
-  .wait-box .icon  { font-size: 44px; margin-bottom: 18px; }
-  .wait-box h2     { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
-  .wait-box p      { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
+  .operator-panel.show { display: block; }
+  .op-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .op-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .op-close {
+    font-size: 11px; color: var(--muted); cursor: pointer;
+    background: none; border: 1px solid var(--border);
+    border-radius: 5px; padding: 4px 10px;
+  }
+  .op-close:hover { color: var(--text); background: var(--border); }
 
-  /* QR panel */
+  /* QR panel (operator) */
   .qr-panel {
     display: flex; align-items: center; gap: 20px;
     background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 16px 20px;
-    margin-bottom: 20px; text-align: left;
+    border-radius: 10px; padding: 14px 18px;
+    margin-bottom: 16px; text-align: left;
   }
   .qr-panel canvas { border-radius: 6px; background: #fff; padding: 6px; flex-shrink: 0; }
   .qr-info .qr-label { font-size: 10px; color: var(--muted); text-transform: uppercase;
@@ -183,22 +233,22 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 20px 24px;
+    padding: 16px 20px;
     text-align: left;
-    margin-bottom: 28px;
+    margin-bottom: 16px;
   }
-  .steps h4 { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;
-              letter-spacing: 0.08em; margin-bottom: 14px; }
-  .step-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+  .steps h4 { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+              letter-spacing: 0.08em; margin-bottom: 12px; }
+  .step-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
   .step-row:last-child { margin-bottom: 0; }
   .step-num {
-    width: 22px; height: 22px; border-radius: 50%;
+    width: 20px; height: 20px; border-radius: 50%;
     background: var(--accent); color: #fff;
-    font-size: 11px; font-weight: 700;
+    font-size: 10px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; margin-top: 1px;
+    flex-shrink: 0; margin-top: 2px;
   }
-  .step-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .step-text { font-size: 12px; color: var(--text); line-height: 1.5; }
   .step-text strong { color: var(--accent); }
 
   /* Paste area */
@@ -212,8 +262,8 @@
     font-family: "Consolas", "Courier New", monospace;
     padding: 10px 14px;
     resize: vertical;
-    min-height: 80px;
-    margin-bottom: 12px;
+    min-height: 72px;
+    margin-bottom: 10px;
     transition: border-color 0.15s;
   }
   .paste-area:focus { outline: none; border-color: var(--accent); color: var(--text); }
@@ -227,8 +277,8 @@
   .reveal-btn {
     background: var(--accent); color: #fff;
     border: none; border-radius: 8px;
-    padding: 13px 40px;
-    font-size: 15px; font-weight: 700;
+    padding: 11px 36px;
+    font-size: 14px; font-weight: 700;
     cursor: pointer; transition: background 0.15s;
     display: block; margin: 0 auto;
   }
@@ -236,7 +286,7 @@
   .reveal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .skip-link {
-    margin-top: 12px; font-size: 11px; color: var(--muted);
+    margin-top: 10px; font-size: 11px; color: var(--muted);
     cursor: pointer; text-align: center;
     background: none; border: none; text-decoration: underline;
   }
@@ -334,49 +384,65 @@
   </div>
 </div>
 
-<!-- ══ WAITING / PASTE OVERLAY ══ -->
+<!-- ══ WAITING OVERLAY ══ -->
 <div class="overlay" id="overlay">
-  <div class="wait-box">
-    <div class="icon">📋</div>
-    <h2>Ready to Reveal</h2>
-    <p>Share the QR code below with attendees while responses are being collected.<br>
-       When ready, paste the exported Excel data to reveal the results.</p>
 
-    <!-- Expected respondents input — visible upfront, no login needed -->
+  <!-- ── CLIENT VIEW (projected on screen, visible to everyone) ── -->
+  <div class="client-view" id="clientView">
+    <div class="cv-eyebrow">Alliance Bank Strategic Transformation Day</div>
+    <h2>We'd love to hear from you</h2>
+    <div class="cv-sub">Scan the QR code below to answer 5 quick questions before we begin.<br>No right or wrong answers — just share what comes to mind.</div>
+    <div class="cv-qr-wrap">
+      <canvas id="qrCanvas"></canvas>
+    </div>
+    <div class="cv-url">
+      Or open: <a id="qrLinkDisplay" href="#" target="_blank"></a>
+    </div>
+    <div class="cv-pulse">Collecting responses…</div>
+  </div>
+
+  <!-- ── OPERATOR PANEL (hidden — press Ctrl+Shift+Z to access) ── -->
+  <div class="operator-panel" id="operatorPanel">
+    <div class="op-header">
+      <div class="op-title">🛠 Operator Panel</div>
+      <button class="op-close" onclick="toggleOperator()">✕ Close</button>
+    </div>
+
+    <!-- Expected respondents -->
     <div class="expected-row">
-      <label class="expected-label" for="expectedInputOverlay">How many respondents are you expecting?</label>
+      <label class="expected-label" for="expectedInputOverlay">Expected respondents:</label>
       <input type="number" class="expected-input" id="expectedInputOverlay"
              value="40" min="1" max="200" placeholder="e.g. 25">
     </div>
 
-    <!-- QR Code panel — pre-loaded with the Microsoft Forms URL -->
+    <!-- Small QR reminder -->
     <div class="qr-panel">
-      <canvas id="qrCanvas"></canvas>
+      <canvas id="qrCanvasSmall"></canvas>
       <div class="qr-info">
-        <div class="qr-label">Attendee Check-In Form</div>
-        <div class="qr-hint">Scan to open the check-in form</div>
-        <div class="qr-link" id="qrLinkDisplay"></div>
+        <div class="qr-label">Form URL</div>
+        <div class="qr-hint">Share this with attendees</div>
+        <div class="qr-link" id="qrLinkSmall"></div>
       </div>
     </div>
 
     <div class="steps">
-      <h4>When ready to reveal — load responses</h4>
+      <h4>When ready to reveal</h4>
       <div class="step-row">
         <div class="step-num">1</div>
-        <div class="step-text">Go to <strong>Microsoft Forms</strong> → Responses tab → click <strong>Open in Excel</strong></div>
+        <div class="step-text">Go to <strong>Microsoft Forms</strong> → Responses → <strong>Open in Excel</strong></div>
       </div>
       <div class="step-row">
         <div class="step-num">2</div>
-        <div class="step-text"><strong>Select all data rows</strong> (not the header) → <strong>Ctrl+C</strong> to copy</div>
+        <div class="step-text"><strong>Select all data rows</strong> (not header) → <strong>Ctrl+C</strong></div>
       </div>
       <div class="step-row">
         <div class="step-num">3</div>
-        <div class="step-text">Click the box below → <strong>Ctrl+V</strong> to paste → click <strong>Reveal Results</strong></div>
+        <div class="step-text">Paste below → click <strong>Reveal Results</strong></div>
       </div>
     </div>
 
     <textarea class="paste-area" id="pasteArea"
-      placeholder="Paste Excel rows here (Ctrl+V)…&#10;Each row: Q1[tab]Q2[tab]Q3[tab]Q4[tab]Q5&#10;Q1–Q4 = numbers 1–5"></textarea>
+      placeholder="Paste Excel rows here (Ctrl+V)…"></textarea>
 
     <div class="paste-error" id="pasteError"></div>
 
@@ -385,6 +451,7 @@
     </button>
     <button class="skip-link" onclick="skipToEmpty()">Skip — show empty dashboard</button>
   </div>
+
 </div>
 
 <!-- ══ TOP BAR ══ -->
@@ -493,9 +560,17 @@ const PRIORITY_MAP = [
 ];
 
 let adminUnlocked = false;
+let operatorVisible = false;
 let radarChart, priorityChart, gaugeChart;
 
-// ══ Admin login ════════════════════════════════════════════════════════════
+// ══ Operator panel toggle (overlay — no password, just a quick flip) ════════
+function toggleOperator() {
+  operatorVisible = !operatorVisible;
+  document.getElementById('clientView').style.display    = operatorVisible ? 'none'  : 'flex';
+  document.getElementById('operatorPanel').classList.toggle('show', operatorVisible);
+}
+
+// ══ Admin login (bottom bar — password protected) ══════════════════════════
 function openLogin() {
   document.getElementById('loginInput').value = '';
   document.getElementById('loginErr').textContent = '';
@@ -523,7 +598,15 @@ function logoutAdmin() {
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
     e.preventDefault();
-    adminUnlocked ? logoutAdmin() : openLogin();
+    // If overlay is showing: toggle between client view and operator panel
+    const overlay = document.getElementById('overlay');
+    const overlayVisible = overlay.style.display !== 'none' && !overlay.classList.contains('hidden');
+    if (overlayVisible) {
+      toggleOperator();
+    } else {
+      // Dashboard is showing: toggle admin bar
+      adminUnlocked ? logoutAdmin() : openLogin();
+    }
   }
   if (e.key === 'Enter' && document.getElementById('loginModal').classList.contains('show')) {
     attemptLogin();
@@ -815,14 +898,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ══ Init ═══════════════════════════════════════════════════════════════════
 window.addEventListener('load', () => {
-  // Generate QR code from the Forms URL
+  // Large QR code for client-facing view
   QRCode.toCanvas(document.getElementById('qrCanvas'), FORMS_URL, {
-    width: 130,
+    width: 200,
     margin: 1,
     color: { dark: '#000000', light: '#ffffff' }
   });
-  // Display the URL text beneath the QR code
-  document.getElementById('qrLinkDisplay').textContent = FORMS_URL;
+  // Set clickable URL link in client view
+  const linkEl = document.getElementById('qrLinkDisplay');
+  linkEl.textContent = FORMS_URL;
+  linkEl.href = FORMS_URL;
+
+  // Small QR code for operator panel
+  QRCode.toCanvas(document.getElementById('qrCanvasSmall'), FORMS_URL, {
+    width: 80,
+    margin: 1,
+    color: { dark: '#000000', light: '#ffffff' }
+  });
+  document.getElementById('qrLinkSmall').textContent = FORMS_URL;
 
   initCharts();
   window.addEventListener('resize', () => {
