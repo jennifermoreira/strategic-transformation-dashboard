@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Alliance Bank Readiness Poll</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<!-- qrcodejs — correct browser-native QR library, exposes window.QRCode constructor -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2230;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #3b82d4;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+  }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .topbar-left h1 { font-size: 14px; font-weight: 700; color: var(--text); }
+  .topbar-left p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .topbar-right   { display: flex; align-items: center; gap: 10px; }
+
+  /* Mini QR in topbar */
+  .topbar-qr {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 8px; cursor: default;
+  }
+  .topbar-qr img { width: 48px; height: 48px; border-radius: 3px; display: block; }
+  .topbar-qr-label { font-size: 9px; color: var(--muted); text-transform: uppercase;
+                     letter-spacing: 0.06em; }
+
+  /* Back to QR screen button */
+  .topbar-back-btn {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s; white-space: nowrap;
+  }
+  .topbar-back-btn:hover { background: var(--border); }
+
+  .status-dot {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600;
+  }
+  .status-dot.waiting { color: var(--yellow); }
+  .status-dot.live    { color: var(--green); }
+  .status-dot::before {
+    content: ''; width: 7px; height: 7px;
+    border-radius: 50%; background: currentColor;
+  }
+  .status-dot.live::before { animation: pulse 1.4s infinite; }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.4; transform:scale(0.8); }
+  }
+
+  /* ── Main layout ── */
+  .page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 20px;
+    gap: 12px;
+  }
+  .grid-top {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .grid-mid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+  }
+  .grid-bot {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Stat card ── */
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stat-card .lbl {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px;
+  }
+  .stat-card .val {
+    font-size: 28px; font-weight: 700;
+    color: var(--text); line-height: 1;
+  }
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .stat-card.accent .val { color: var(--accent); }
+  .stat-card.big    .val { font-size: 40px; }
+
+  /* ── Chart card ── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .chart-card h3   { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; flex-shrink: 0; }
+  .chart-card .sub { font-size: 10px; color: var(--muted); margin-bottom: 8px; flex-shrink: 0; }
+  .chart-card .chart-wrap { flex: 1; min-height: 0; }
+
+  /* ── Score badge ── */
+  .score-badge {
+    display: inline-block; padding: 2px 9px;
+    border-radius: 20px; font-size: 11px; font-weight: 700; margin-top: 4px;
+  }
+  .s-low  { background: rgba(248,81,73,0.15);  color: var(--red); }
+  .s-mid  { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .s-high { background: rgba(63,185,80,0.15);  color: var(--green); }
+
+  /* ── Dim bars ── */
+  .dim-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 11px; }
+  .dim-lbl { flex: 0 0 160px; color: var(--muted); }
+  .dim-trk { flex: 1; background: var(--border); border-radius: 3px; height: 7px; }
+  .dim-fil { height: 7px; border-radius: 3px; width: 0; transition: width 1.2s ease; }
+  .dim-val { flex: 0 0 28px; text-align: right; font-weight: 600; color: var(--text); }
+
+  /* ════════════════════════════════════════
+     WAITING OVERLAY
+  ════════════════════════════════════════ */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(13,17,23,0.97);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 200;
+    transition: opacity 0.6s ease;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+
+  /* ── CLIENT VIEW — full screen, 16:9 projection layout ── */
+  .client-view {
+    width: 100%; height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 5vh 8vw;
+    text-align: center;
+  }
+
+  /* Top: eyebrow + headline */
+  .cv-top { display: flex; flex-direction: column; align-items: center; margin-bottom: 4vh; }
+  .client-view .cv-eyebrow {
+    font-size: clamp(11px, 1.4vw, 18px);
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: clamp(8px, 1.2vh, 16px); font-weight: 700;
+  }
+  .client-view h2 {
+    font-size: clamp(32px, 5vw, 64px);
+    font-weight: 800; color: var(--text);
+    line-height: 1.15; margin-bottom: clamp(8px, 1.2vh, 16px);
+  }
+  .client-view .cv-sub {
+    font-size: clamp(14px, 1.6vw, 22px);
+    color: var(--muted); line-height: 1.6;
+    max-width: 700px;
+  }
+
+  /* Middle: QR + right panel side by side */
+  .cv-middle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6vw;
+  }
+  .cv-qr-wrap {
+    background: #fff; border-radius: 16px;
+    padding: clamp(10px, 1.5vw, 18px);
+    flex-shrink: 0;
+  }
+  .cv-qr-wrap img { display: block; width: clamp(160px, 18vw, 260px); height: clamp(160px, 18vw, 260px); }
+
+  /* Right side of middle: URL + pulse + count + button */
+  .cv-right {
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: clamp(10px, 1.8vh, 20px); max-width: 420px; text-align: left;
+  }
+  .cv-url {
+    font-size: clamp(11px, 1vw, 14px); color: var(--muted);
+    word-break: break-all; line-height: 1.5;
+  }
+  .cv-url a { color: var(--accent); text-decoration: none; }
+  .cv-url a:hover { text-decoration: underline; }
+  .cv-pulse {
+    display: flex; align-items: center; gap: 8px;
+    font-size: clamp(13px, 1.4vw, 18px); color: var(--green); font-weight: 700;
+  }
+  .cv-pulse::before {
+    content: ''; width: clamp(8px, 0.9vw, 12px); height: clamp(8px, 0.9vw, 12px);
+    border-radius: 50%; background: var(--green); animation: pulse 1.4s infinite;
+  }
+
+  /* Respondent count */
+  .cv-count-row {
+    display: flex; flex-direction: column; gap: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: clamp(10px, 1.5vh, 16px) clamp(14px, 2vw, 20px);
+    width: 100%;
+  }
+  .cv-count-label {
+    font-size: clamp(11px, 1.1vw, 14px); color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .cv-count-input {
+    background: var(--bg); border: 2px solid var(--accent);
+    color: var(--text); border-radius: 6px;
+    padding: 6px 10px; font-size: clamp(20px, 2.5vw, 32px); font-weight: 700;
+    width: 100%; text-align: center;
+  }
+  .cv-count-input:focus { outline: none; border-color: #60a5fa; }
+  .cv-count-input::placeholder { font-size: clamp(12px, 1.1vw, 15px); font-weight: 400; color: var(--muted); }
+
+  /* View Live Dashboard button */
+  .cv-dashboard-btn {
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    padding: clamp(10px, 1.4vh, 16px) clamp(18px, 2vw, 28px);
+    font-size: clamp(13px, 1.4vw, 18px); font-weight: 700;
+    cursor: pointer; transition: all 0.15s; width: 100%;
+  }
+  .cv-dashboard-btn:hover { background: #2563bc; }
+
+  /* Bottom: thin hint */
+  .cv-bottom {
+    font-size: clamp(10px, 0.9vw, 13px); color: #30363d;
+    text-align: center; padding-top: 2vh;
+  }
+
+  /* ── OPERATOR PANEL (hidden until Ctrl+Shift+Z) ── */
+  .operator-panel {
+    display: none;
+    text-align: center; max-width: 600px;
+    padding: 0 24px;
+  }
+  .operator-panel.show { display: block; }
+  .op-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .op-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .op-close {
+    font-size: 11px; color: var(--muted); cursor: pointer;
+    background: none; border: 1px solid var(--border);
+    border-radius: 5px; padding: 4px 10px;
+  }
+  .op-close:hover { color: var(--text); background: var(--border); }
+
+  /* QR panel (operator) */
+  .qr-panel {
+    display: flex; align-items: center; gap: 20px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px;
+    margin-bottom: 16px; text-align: left;
+  }
+  .qr-panel canvas { border-radius: 6px; background: #fff; padding: 6px; flex-shrink: 0; }
+  .qr-info .qr-label { font-size: 10px; color: var(--muted); text-transform: uppercase;
+                        letter-spacing: 0.08em; margin-bottom: 4px; }
+  .qr-info .qr-hint  { font-size: 12px; color: var(--text); margin-bottom: 6px; font-weight: 600; }
+  .qr-info .qr-link  { font-size: 10px; color: var(--accent); word-break: break-all; line-height: 1.4; }
+
+  /* Steps */
+  .steps {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    text-align: left;
+    margin-bottom: 16px;
+  }
+  .steps h4 { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+              letter-spacing: 0.08em; margin-bottom: 12px; }
+  .step-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+  .step-row:last-child { margin-bottom: 0; }
+  .step-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 2px;
+  }
+  .step-text { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .step-text strong { color: var(--accent); }
+
+  /* Paste area */
+  .paste-area {
+    width: 100%; max-width: 480px;
+    background: var(--surface2);
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: "Consolas", "Courier New", monospace;
+    padding: 10px 14px;
+    resize: vertical;
+    min-height: 72px;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+  }
+  .paste-area:focus { outline: none; border-color: var(--accent); color: var(--text); }
+
+  .paste-error {
+    display: none; font-size: 12px; color: var(--red);
+    margin-bottom: 10px;
+  }
+  .paste-error.show { display: block; }
+
+  .reveal-btn {
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 11px 36px;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+    display: block; margin: 0 auto;
+  }
+  .reveal-btn:hover    { background: #2563bc; }
+  .reveal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .skip-link {
+    margin-top: 10px; font-size: 11px; color: var(--muted);
+    cursor: pointer; text-align: center;
+    background: none; border: none; text-decoration: underline;
+  }
+  .skip-link:hover { color: var(--text); }
+
+  /* Expected respondents row on overlay */
+  .expected-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; margin-bottom: 20px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 18px;
+  }
+  .expected-label {
+    font-size: 13px; color: var(--text); font-weight: 500;
+  }
+  .expected-input {
+    background: var(--bg); border: 2px solid var(--accent);
+    color: var(--text); border-radius: 6px;
+    padding: 6px 10px; font-size: 18px; font-weight: 700;
+    width: 72px; text-align: center;
+  }
+  .expected-input:focus { outline: none; border-color: #60a5fa; }
+
+  /* ════════════════════════════════════════
+     ADMIN LOGIN MODAL
+  ════════════════════════════════════════ */
+  .login-modal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(13,17,23,0.92);
+    z-index: 300; align-items: center; justify-content: center;
+  }
+  .login-modal.show { display: flex; }
+  .login-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 32px 36px; width: 300px; text-align: center;
+  }
+  .login-box .li { font-size: 30px; margin-bottom: 12px; }
+  .login-box h3  { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .login-box p   { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .login-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 10px 14px;
+    font-size: 14px; text-align: center; letter-spacing: 0.15em; margin-bottom: 10px;
+  }
+  .login-input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .login-err { font-size: 12px; color: var(--red); margin-bottom: 8px; min-height: 16px; }
+  .login-btn {
+    width: 100%; background: var(--accent); color: #fff; border: none;
+    border-radius: 8px; padding: 10px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .login-btn:hover { background: #2563bc; }
+  .login-cancel { margin-top: 10px; font-size: 12px; color: var(--muted); cursor: pointer;
+                  background: none; border: none; text-decoration: underline; }
+  .login-cancel:hover { color: var(--text); }
+
+  /* ── Admin bar ── */
+  .admin-bar {
+    display: none; align-items: center; gap: 10px;
+    padding: 8px 20px;
+    background: var(--surface); border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .admin-bar.show { display: flex; }
+  .admin-bar span { font-size: 11px; color: var(--muted); }
+  .btn-sm {
+    padding: 5px 12px; border-radius: 5px; font-size: 11px; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); transition: background 0.15s;
+  }
+  .btn-sm:hover  { background: var(--border); }
+  .btn-sm.danger { border-color: var(--red); color: var(--red); }
+  .btn-sm.danger:hover { background: rgba(248,81,73,0.1); }
+  .spacer { flex: 1; }
+  .att-input {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 5px; padding: 4px 8px;
+    font-size: 12px; width: 52px; text-align: center;
+  }
+  .att-input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+</style>
+</head>
+<body>
+
+<!-- ══ ADMIN LOGIN MODAL ══ -->
+<div class="login-modal" id="loginModal">
+  <div class="login-box">
+    <div class="li">🔐</div>
+    <h3>Admin Access</h3>
+    <p>Enter the admin password</p>
+    <input type="password" class="login-input" id="loginInput" placeholder="••••••••" maxlength="32">
+    <div class="login-err" id="loginErr"></div>
+    <button class="login-btn" onclick="attemptLogin()">Unlock</button>
+    <button class="login-cancel" onclick="closeLogin()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ WAITING OVERLAY ══ -->
+<div class="overlay" id="overlay">
+
+  <!-- ── CLIENT VIEW (projected on screen, visible to everyone) ── -->
+  <div class="client-view" id="clientView">
+
+    <!-- Top: heading -->
+    <div class="cv-top">
+      <div class="cv-eyebrow">Alliance Bank Strategic Transformation Day</div>
+      <h2>We'd love to hear from you</h2>
+      <div class="cv-sub">Scan the QR code to answer 5 quick questions before we begin. No right or wrong answers — just share what comes to mind.</div>
+    </div>
+
+    <!-- Middle: QR left, actions right -->
+    <div class="cv-middle">
+      <div class="cv-qr-wrap">
+        <img id="qrImg" alt="QR Code">
+      </div>
+      <div class="cv-right">
+        <div class="cv-pulse">Collecting responses…</div>
+        <div class="cv-url">Or open: <a id="qrLinkDisplay" href="#" target="_blank"></a></div>
+        <div class="cv-count-row">
+          <div class="cv-count-label">Expected respondents</div>
+          <input type="number" class="cv-count-input" id="expectedInputOverlay"
+                 value="" min="1" max="200" placeholder="Enter total">
+        </div>
+        <button class="cv-dashboard-btn" onclick="skipToEmpty()">View Live Dashboard →</button>
+      </div>
+    </div>
+
+    <!-- Bottom hint -->
+    <div class="cv-bottom">Press Ctrl+Shift+Z to load results when ready</div>
+
+  </div>
+
+  <!-- ── OPERATOR PANEL (hidden — press Ctrl+Shift+Z to access) ── -->
+  <div class="operator-panel" id="operatorPanel">
+    <div class="op-header">
+      <div class="op-title">🛠 Operator Panel</div>
+      <button class="op-close" onclick="toggleOperator()">✕ Close</button>
+    </div>
+
+    <!-- Small QR reminder -->
+    <div class="qr-panel">
+      <img id="qrImgSmall" alt="QR" style="width:80px;height:80px;border-radius:4px;">
+      <div class="qr-info">
+        <div class="qr-label">Form URL</div>
+        <div class="qr-hint">Share this with attendees</div>
+        <div class="qr-link" id="qrLinkSmall"></div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <h4>When ready to reveal</h4>
+      <div class="step-row">
+        <div class="step-num">1</div>
+        <div class="step-text">Go to <strong>Microsoft Forms</strong> → Responses → <strong>Open in Excel</strong></div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>Select all data rows</strong> (not header) → <strong>Ctrl+C</strong></div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">3</div>
+        <div class="step-text">Paste below → click <strong>Reveal Results</strong></div>
+      </div>
+    </div>
+
+    <textarea class="paste-area" id="pasteArea"
+      placeholder="Paste Excel rows here (Ctrl+V)…"></textarea>
+
+    <div class="paste-error" id="pasteError"></div>
+
+    <button class="reveal-btn" id="revealBtn" onclick="loadAndReveal()">
+      Reveal Results
+    </button>
+    <button class="skip-link" onclick="skipToEmpty()">Skip — show empty dashboard</button>
+  </div>
+
+</div>
+
+<!-- ══ TOP BAR ══ -->
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>Alliance Bank Strategic Transformation Day</h1>
+    <p>Technology Readiness Poll — Results Dashboard</p>
+  </div>
+  <div class="topbar-right">
+    <div class="status-dot waiting" id="statusDot">WAITING</div>
+    <div style="font-size:11px; color:var(--muted);" id="responseCount">0 responses loaded</div>
+    <!-- QR code mini panel — always visible on dashboard -->
+    <div class="topbar-qr" id="topbarQr">
+      <img id="qrImgTopbar" alt="Form QR" title="Scan to open the check-in form">
+      <span class="topbar-qr-label">Scan to respond</span>
+    </div>
+    <!-- Back to QR screen button -->
+    <button class="topbar-back-btn" onclick="showOverlay(); resetOperator();">
+      ← QR Screen
+    </button>
+  </div>
+</div>
+
+<!-- ══ MAIN DASHBOARD ══ -->
+<div class="page">
+
+  <!-- Stat row -->
+  <div class="grid-top">
+    <div class="stat-card">
+      <div class="lbl">Responses</div>
+      <div class="val" id="statTotal">—</div>
+      <div class="sub">of <span id="statExpected">40</span> expected</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="lbl">Response Rate</div>
+      <div class="val" id="statRate">—</div>
+      <div class="sub">% of expected</div>
+    </div>
+    <div class="stat-card big">
+      <div class="lbl">Overall Readiness Score</div>
+      <div class="val" id="statScore">—</div>
+      <div id="scoreBadge"></div>
+    </div>
+    <div class="stat-card">
+      <div class="lbl">Top Priority</div>
+      <div class="val" style="font-size:15px; line-height:1.3;" id="statPriority">—</div>
+      <div class="sub" id="statPriorityPct"></div>
+    </div>
+  </div>
+
+  <!-- Charts row 1 -->
+  <div class="grid-mid">
+    <div class="chart-card">
+      <h3>Readiness by Dimension</h3>
+      <div class="sub">Average score out of 5</div>
+      <div class="chart-wrap" id="radarChart"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Top Technology Priority</h3>
+      <div class="sub">What matters most to the room right now</div>
+      <div class="chart-wrap" id="priorityChart"></div>
+    </div>
+  </div>
+
+  <!-- Charts row 2 -->
+  <div class="grid-bot">
+    <div class="chart-card">
+      <h3>Dimension Score Detail</h3>
+      <div class="sub">Averaged ratings · 1 = low · 5 = high</div>
+      <div style="margin-top:10px; flex:1; display:flex; flex-direction:column; justify-content:center;">
+        <div class="dim-row"><div class="dim-lbl">Infrastructure & Ops</div><div class="dim-trk"><div class="dim-fil" id="df1" style="background:#3b82d4;"></div></div><div class="dim-val" id="dv1">—</div></div>
+        <div class="dim-row"><div class="dim-lbl">App Security & Automation</div><div class="dim-trk"><div class="dim-fil" id="df2" style="background:#7c5cd8;"></div></div><div class="dim-val" id="dv2">—</div></div>
+        <div class="dim-row"><div class="dim-lbl">AI Adoption</div><div class="dim-trk"><div class="dim-fil" id="df3" style="background:#10b981;"></div></div><div class="dim-val" id="dv3">—</div></div>
+        <div class="dim-row"><div class="dim-lbl">Data-Driven Innovation</div><div class="dim-trk"><div class="dim-fil" id="df4" style="background:#f59e0b;"></div></div><div class="dim-val" id="dv4">—</div></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Readiness Score</h3>
+      <div class="sub">Overall score interpretation</div>
+      <div class="chart-wrap" id="gaugeChart"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ ADMIN BAR ══ -->
+<div class="admin-bar" id="adminBar">
+  <span>Expected attendees:</span>
+  <input type="number" class="att-input" id="expectedInput" value="" min="1" max="200" placeholder="—">
+  <div class="spacer"></div>
+  <button class="btn-sm" onclick="showOverlay()">↩ Re-load Responses</button>
+  <button class="btn-sm danger" onclick="clearDashboard()">Clear Dashboard</button>
+  <button class="btn-sm" onclick="logoutAdmin()" style="border-color:#8b949e; margin-left:6px;">Lock Admin</button>
+</div>
+
+<script>
+// ══ Constants ══════════════════════════════════════════════════════════════
+const ADMIN_PASSWORD = 'admin123';
+
+const PRIORITY_LABELS = {
+  infra:    'Infrastructure & Resilience',
+  security: 'App Security & Automation',
+  ai:       'Scaling AI to Production',
+  data:     'Data Foundation & Innovation',
+  ela:      'Maximise Tech Investment / ELA',
+};
+
+// Microsoft Forms exports Q5 as full text — map common label fragments to keys
+const PRIORITY_MAP = [
+  ['infra',    ['infra','reliable','visible','platform','system']],
+  ['security', ['secur','compliance','tighten']],
+  ['ai',       ['ai','artificial','experiment','machine']],
+  ['data',     ['data','access','trust','act on']],
+  ['ela',      ['ela','invest','licensing','value from']],
+];
+
+let adminUnlocked = false;
+let operatorVisible = false;
+let radarChart, priorityChart, gaugeChart;
+
+// ══ Operator panel toggle (overlay — no password, just a quick flip) ════════
+function toggleOperator() {
+  operatorVisible = !operatorVisible;
+  document.getElementById('clientView').style.display    = operatorVisible ? 'none'  : 'flex';
+  document.getElementById('operatorPanel').classList.toggle('show', operatorVisible);
+}
+
+// ══ Admin login (bottom bar — password protected) ══════════════════════════
+function openLogin() {
+  document.getElementById('loginInput').value = '';
+  document.getElementById('loginErr').textContent = '';
+  document.getElementById('loginModal').classList.add('show');
+  setTimeout(() => document.getElementById('loginInput').focus(), 80);
+}
+function closeLogin() {
+  document.getElementById('loginModal').classList.remove('show');
+}
+function attemptLogin() {
+  if (document.getElementById('loginInput').value === ADMIN_PASSWORD) {
+    adminUnlocked = true;
+    closeLogin();
+    document.getElementById('adminBar').classList.add('show');
+  } else {
+    document.getElementById('loginErr').textContent = 'Incorrect password.';
+    document.getElementById('loginInput').value = '';
+    document.getElementById('loginInput').focus();
+  }
+}
+function logoutAdmin() {
+  adminUnlocked = false;
+  document.getElementById('adminBar').classList.remove('show');
+}
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
+    e.preventDefault();
+    // If overlay is showing: toggle between client view and operator panel
+    const overlay = document.getElementById('overlay');
+    const overlayVisible = overlay.style.display !== 'none' && !overlay.classList.contains('hidden');
+    if (overlayVisible) {
+      toggleOperator();
+    } else {
+      // Dashboard is showing: toggle admin bar
+      adminUnlocked ? logoutAdmin() : openLogin();
+    }
+  }
+  if (e.key === 'Enter' && document.getElementById('loginModal').classList.contains('show')) {
+    attemptLogin();
+  }
+});
+
+// ══ Overlay helpers ════════════════════════════════════════════════════════
+function showOverlay() {
+  const o = document.getElementById('overlay');
+  o.style.display = 'flex';
+  o.classList.remove('hidden');
+}
+function resetOperator() {
+  // Always return to client view (not operator panel) when coming back
+  operatorVisible = false;
+  document.getElementById('clientView').style.display = 'grid';
+  document.getElementById('operatorPanel').classList.remove('show');
+}
+function hideOverlay() {
+  const o = document.getElementById('overlay');
+  o.classList.add('hidden');
+  setTimeout(() => { o.style.display = 'none'; }, 650);
+}
+function skipToEmpty() {
+  hideOverlay();
+  setStatusLive();
+}
+function setStatusLive() {
+  const d = document.getElementById('statusDot');
+  d.className = 'status-dot live';
+  d.textContent = 'RESULTS LOADED';
+}
+
+// ══ Parse pasted data ══════════════════════════════════════════════════════
+// Supports two formats:
+//   A) Tab-separated plain numbers: "3\t4\t2\t5\tinfra"  (manual entry / CSV)
+//   B) Microsoft Forms Excel export: columns may have extra header text;
+//      rows contain the question text answers for Q5
+function parseRows(raw) {
+  const lines = raw.trim().split('\n').filter(l => l.trim());
+  const rows = [];
+  const errors = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const cols = lines[i].split('\t').map(c => c.trim());
+
+    // Skip header rows — detect by checking if first 4 cols are non-numeric
+    const first4 = cols.slice(0, 4);
+    if (first4.every(c => isNaN(Number(c)) || c === '')) continue;
+
+    // Try to find 4 numeric values and 1 text value
+    // Forms may export with extra columns (timestamp, name, email stripped already)
+    // We look for the first 4 consecutive numeric columns
+    const numCols = [];
+    let textCol = '';
+    for (const c of cols) {
+      const n = Number(c);
+      if (!isNaN(n) && c !== '' && numCols.length < 4) {
+        numCols.push(n);
+      } else if (c !== '' && numCols.length === 4 && textCol === '') {
+        textCol = c.toLowerCase();
+      }
+    }
+
+    if (numCols.length < 4) {
+      errors.push(`Row ${i + 1}: could not find 4 numeric ratings`);
+      continue;
+    }
+
+    const [q1, q2, q3, q4] = numCols;
+    if ([q1,q2,q3,q4].some(v => v < 1 || v > 5)) {
+      errors.push(`Row ${i + 1}: ratings must be 1–5`);
+      continue;
+    }
+
+    // Resolve Q5 — accept key directly or match text
+    let q5 = '';
+    const rawQ5 = cols[cols.length - 1].toLowerCase();
+    if (PRIORITY_LABELS[rawQ5]) {
+      q5 = rawQ5;
+    } else {
+      for (const [key, fragments] of PRIORITY_MAP) {
+        if (fragments.some(f => rawQ5.includes(f))) { q5 = key; break; }
+      }
+    }
+    if (!q5) {
+      // Default to 'infra' if unresolvable but warn
+      q5 = 'infra';
+      errors.push(`Row ${i + 1}: Q5 value "${cols[cols.length-1]}" not recognised — defaulted to Infrastructure`);
+    }
+
+    rows.push({ q1, q2, q3, q4, q5 });
+  }
+
+  return { rows, errors };
+}
+
+// ══ Load & reveal ══════════════════════════════════════════════════════════
+function loadAndReveal() {
+  const raw = document.getElementById('pasteArea').value;
+  document.getElementById('pasteError').classList.remove('show');
+
+  if (!raw.trim()) {
+    showError('Please paste your response data first.');
+    return;
+  }
+
+  const { rows, errors } = parseRows(raw);
+
+  if (rows.length === 0) {
+    showError('No valid rows found. Make sure you copied the data rows (not headers) from Excel.\n' + errors.join('\n'));
+    return;
+  }
+
+  if (errors.length > 0) {
+    // Non-fatal — show warning but continue
+    console.warn('Parse warnings:', errors);
+  }
+
+  updateDashboard(rows);
+  hideOverlay();
+  setStatusLive();
+}
+
+function showError(msg) {
+  const el = document.getElementById('pasteError');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+// ══ Dashboard update ═══════════════════════════════════════════════════════
+function updateDashboard(rows) {
+  const total = rows.length;
+  const expected = parseInt(document.getElementById('expectedInput').value) || 40;
+
+  // Aggregates
+  const sums = { q1: 0, q2: 0, q3: 0, q4: 0 };
+  const pc   = { infra: 0, security: 0, ai: 0, data: 0, ela: 0 };
+  for (const r of rows) {
+    sums.q1 += r.q1; sums.q2 += r.q2; sums.q3 += r.q3; sums.q4 += r.q4;
+    if (pc[r.q5] !== undefined) pc[r.q5]++;
+  }
+  const avgs = {
+    q1: +(sums.q1 / total).toFixed(2),
+    q2: +(sums.q2 / total).toFixed(2),
+    q3: +(sums.q3 / total).toFixed(2),
+    q4: +(sums.q4 / total).toFixed(2),
+  };
+  const overallRaw = (avgs.q1 + avgs.q2 + avgs.q3 + avgs.q4) / 4;
+  const score = Math.round(((overallRaw - 1) / 4) * 100);
+
+  // ── Stat cards ──
+  document.getElementById('statTotal').textContent    = total;
+  document.getElementById('statExpected').textContent = expected;
+  document.getElementById('statRate').textContent     = Math.round((total / expected) * 100) + '%';
+  document.getElementById('statScore').textContent    = score;
+  document.getElementById('responseCount').textContent = total + ' responses loaded';
+
+  const badge = document.getElementById('scoreBadge');
+  if      (score < 50) badge.innerHTML = '<span class="score-badge s-low">Early Stage</span>';
+  else if (score < 75) badge.innerHTML = '<span class="score-badge s-mid">Developing</span>';
+  else                 badge.innerHTML = '<span class="score-badge s-high">Advanced</span>';
+
+  // Top priority
+  const topKey = Object.keys(pc).sort((a,b) => pc[b] - pc[a])[0];
+  document.getElementById('statPriority').textContent    = PRIORITY_LABELS[topKey];
+  document.getElementById('statPriorityPct').textContent = Math.round((pc[topKey] / total) * 100) + '% of respondents';
+
+  // ── Radar ──
+  radarChart.setOption({
+    series: [{ data: [{ value: [avgs.q1, avgs.q2, avgs.q3, avgs.q4], name: 'Score' }] }]
+  });
+
+  // ── Priority bar ──
+  priorityChart.setOption({
+    series: [{ data: [pc.infra, pc.security, pc.ai, pc.data, pc.ela] }]
+  });
+
+  // ── Dim bars ──
+  setDimBar(1, avgs.q1); setDimBar(2, avgs.q2);
+  setDimBar(3, avgs.q3); setDimBar(4, avgs.q4);
+
+  // ── Gauge ──
+  updateGauge(score);
+}
+
+function setDimBar(i, val) {
+  const pct = ((val - 1) / 4) * 100;
+  document.getElementById('df' + i).style.width = pct + '%';
+  document.getElementById('dv' + i).textContent = val ? val.toFixed(1) : '—';
+}
+
+// ══ Chart init ═════════════════════════════════════════════════════════════
+function initCharts() {
+  radarChart = echarts.init(document.getElementById('radarChart'));
+  radarChart.setOption({
+    radar: {
+      indicator: [
+        { name: 'Infrastructure', max: 5 },
+        { name: 'App Security',   max: 5 },
+        { name: 'AI Adoption',    max: 5 },
+        { name: 'Data Innovation',max: 5 },
+      ],
+      shape: 'polygon', splitNumber: 5,
+      axisName: { color: '#8b949e', fontSize: 11 },
+      splitLine: { lineStyle: { color: '#30363d' } },
+      splitArea: { areaStyle: { color: ['rgba(59,130,212,0.03)','rgba(59,130,212,0.06)'] } },
+      axisLine:  { lineStyle: { color: '#30363d' } },
+    },
+    series: [{
+      type: 'radar',
+      data: [{ value: [0,0,0,0], name: 'Score' }],
+      lineStyle:  { color: '#3b82d4', width: 2 },
+      areaStyle:  { color: 'rgba(59,130,212,0.18)' },
+      symbol: 'circle', symbolSize: 6,
+      itemStyle:  { color: '#3b82d4' },
+    }],
+  });
+
+  priorityChart = echarts.init(document.getElementById('priorityChart'));
+  priorityChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 160, right: 40, top: 8, bottom: 16 },
+    xAxis: { type: 'value', splitLine: { lineStyle: { color: '#30363d' } },
+             axisLabel: { color: '#8b949e', fontSize: 10 } },
+    yAxis: { type: 'category', data: Object.values(PRIORITY_LABELS),
+             axisLabel: { color: '#8b949e', fontSize: 10 } },
+    color: ['#3b82d4'],
+    series: [{ type: 'bar', data: [0,0,0,0,0], barMaxWidth: 18,
+               itemStyle: { borderRadius: [0,4,4,0] },
+               label: { show: true, position: 'right', color: '#e6edf3', fontSize: 11 } }],
+  });
+
+  gaugeChart = echarts.init(document.getElementById('gaugeChart'));
+  updateGauge(0);
+}
+
+function updateGauge(score) {
+  const color = score >= 75 ? '#3fb950' : score >= 50 ? '#d29922' : '#f85149';
+  gaugeChart.setOption({
+    series: [{
+      type: 'gauge',
+      startAngle: 200, endAngle: -20,
+      min: 0, max: 100, radius: '88%',
+      progress: { show: true, width: 12, itemStyle: { color } },
+      axisLine: { lineStyle: { width: 12, color: [[1, '#30363d']] } },
+      axisTick: { show: false }, splitLine: { show: false },
+      axisLabel: { show: false }, pointer: { show: false }, anchor: { show: false },
+      detail: {
+        valueAnimation: true, fontSize: 32, fontWeight: 700,
+        color: '#e6edf3', formatter: '{value}', offsetCenter: [0, '10%'],
+      },
+      title: { show: true, offsetCenter: [0, '38%'], color: '#8b949e', fontSize: 10,
+               formatter: 'out of 100' },
+      data: [{ value: score, name: 'out of 100' }],
+    }],
+  });
+}
+
+// ══ Clear ══════════════════════════════════════════════════════════════════
+function clearDashboard() {
+  if (!confirm('Clear all loaded results?')) return;
+  ['statTotal','statRate','statScore','statPriority','statPriorityPct'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+  document.getElementById('scoreBadge').innerHTML = '';
+  document.getElementById('responseCount').textContent = '0 responses loaded';
+  document.getElementById('statusDot').className = 'status-dot waiting';
+  document.getElementById('statusDot').textContent = 'WAITING';
+  [1,2,3,4].forEach(i => setDimBar(i, 0));
+  updateGauge(0);
+  radarChart.setOption({ series: [{ data: [{ value: [0,0,0,0] }] }] });
+  priorityChart.setOption({ series: [{ data: [0,0,0,0,0] }] });
+  document.getElementById('pasteArea').value = '';
+  document.getElementById('pasteError').classList.remove('show');
+  showOverlay();
+}
+
+// ══ Microsoft Forms URL — hardcoded ════════════════════════════════════════
+const FORMS_URL = 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=V3D2_MlQ1EqY8__KZK3Z6WGbPTmZByxJlQFVsxJkyLZUQTJPUE9JNjROWkZJWDlPU0wwUlhCSlkyTC4u';
+
+// ══ Sync overlay expected input → hidden admin input ═══════════════════════
+// Both inputs control the same value; overlay one is always visible,
+// admin bar one updates automatically so updateDashboard() reads correctly.
+document.addEventListener('DOMContentLoaded', () => {
+  const overlayInput = document.getElementById('expectedInputOverlay');
+  const adminInput   = document.getElementById('expectedInput');
+  overlayInput.addEventListener('input', () => {
+    adminInput.value = overlayInput.value;
+  });
+  adminInput.addEventListener('input', () => {
+    overlayInput.value = adminInput.value;
+  });
+});
+
+// ══ QR helper — uses qrcodejs constructor (browser-native, no Node.js) ════
+function makeQR(elementId, size) {
+  // qrcodejs renders into a container div/element directly
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  // Use a temporary hidden div as render target, then extract the canvas/img
+  const tmp = document.createElement('div');
+  tmp.style.display = 'none';
+  document.body.appendChild(tmp);
+  const qr = new QRCode(tmp, {
+    text: FORMS_URL,
+    width: size,
+    height: size,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  // qrcodejs creates an <img> inside the container
+  setTimeout(() => {
+    const img = tmp.querySelector('img');
+    if (img && img.src) {
+      el.src = img.src;
+    }
+    document.body.removeChild(tmp);
+  }, 100);
+}
+
+// ══ Init ═══════════════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+
+  // Generate all three QR codes from the same Forms URL
+  makeQR('qrImg', 200);        // large — client view
+  makeQR('qrImgSmall', 80);    // small — operator panel
+  makeQR('qrImgTopbar', 48);   // tiny  — topbar on live dashboard
+
+  // Set clickable URL link in client view
+  const linkEl = document.getElementById('qrLinkDisplay');
+  linkEl.textContent = FORMS_URL;
+  linkEl.href = FORMS_URL;
+  document.getElementById('qrLinkSmall').textContent = FORMS_URL;
+
+  initCharts();
+  window.addEventListener('resize', () => {
+    radarChart    && radarChart.resize();
+    priorityChart && priorityChart.resize();
+    gaugeChart    && gaugeChart.resize();
+  });
+});
+</script>
+</body>
+</html>
