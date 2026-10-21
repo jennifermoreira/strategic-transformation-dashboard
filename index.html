@@ -3,1181 +3,908 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard — Alliance Bank Readiness Poll</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-<!-- qrcodejs — correct browser-native QR library, exposes window.QRCode constructor -->
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<title>Poll Insights</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --surface2: #1c2230;
-    --border: #30363d;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --accent: #3b82d4;
-    --green: #3fb950;
-    --yellow: #d29922;
-    --red: #f85149;
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2230; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #3b82d4;
+    --green: #3fb950; --amber: #d29922;
   }
 
+  /* Everything is sized in rem and rem scales with the window, so the layout is the same
+     at any 16:9 size and never needs to scroll. Text is sized for reading from the back of a
+     room: main text about 1.3rem or more, smallest captions about 1rem. */
+  html { font-size: clamp(10px, min(0.85vw, 1.5vh), 26px); }
   html, body { height: 100%; overflow: hidden; }
-
   body {
     font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 14px;
-    line-height: 1.5;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
-
-  /* ── Top bar ── */
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .topbar-left h1 { font-size: 14px; font-weight: 700; color: var(--text); }
-  .topbar-left p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
-  .topbar-right   { display: flex; align-items: center; gap: 10px; }
-
-  /* Mini QR in topbar */
-  .topbar-qr {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 6px; padding: 5px 8px; cursor: default;
-  }
-  .topbar-qr img { width: 48px; height: 48px; border-radius: 3px; display: block; }
-  .topbar-qr-label { font-size: 9px; color: var(--muted); text-transform: uppercase;
-                     letter-spacing: 0.06em; }
-
-  /* Back to QR screen button */
-  .topbar-back-btn {
-    background: var(--surface2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 6px;
-    padding: 6px 12px; font-size: 12px; font-weight: 600;
-    cursor: pointer; transition: background 0.15s; white-space: nowrap;
-  }
-  .topbar-back-btn:hover { background: var(--border); }
-
-  .status-dot {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 11px; font-weight: 600;
-  }
-  .status-dot.waiting { color: var(--yellow); }
-  .status-dot.live    { color: var(--green); }
-  .status-dot::before {
-    content: ''; width: 7px; height: 7px;
-    border-radius: 50%; background: currentColor;
-  }
-  .status-dot.live::before { animation: pulse 1.4s infinite; }
-  @keyframes pulse {
-    0%,100% { opacity:1; transform:scale(1); }
-    50%      { opacity:0.4; transform:scale(0.8); }
-  }
-
-  /* ── Main layout ── */
-  .page {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 14px 20px;
-    gap: 12px;
-  }
-  .grid-top {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    flex-shrink: 0;
-  }
-  .grid-mid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    flex: 1;
-    min-height: 0;
-  }
-  .grid-bot {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    flex: 1;
-    min-height: 0;
-  }
-
-  /* ── Stat card ── */
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-  }
-  .stat-card .lbl {
-    font-size: 10px; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px;
-  }
-  .stat-card .val {
-    font-size: 28px; font-weight: 700;
-    color: var(--text); line-height: 1;
-  }
-  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
-  .stat-card.accent .val { color: var(--accent); }
-  .stat-card.big    .val { font-size: 40px; }
-
-  /* ── Chart card ── */
-  .chart-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .chart-card h3   { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; flex-shrink: 0; }
-  .chart-card .sub { font-size: 10px; color: var(--muted); margin-bottom: 8px; flex-shrink: 0; }
-  .chart-card .chart-wrap { flex: 1; min-height: 0; }
-
-  /* ── Score badge ── */
-  .score-badge {
-    display: inline-block; padding: 2px 9px;
-    border-radius: 20px; font-size: 11px; font-weight: 700; margin-top: 4px;
-  }
-  .s-low  { background: rgba(248,81,73,0.15);  color: var(--red); }
-  .s-mid  { background: rgba(210,153,34,0.15); color: var(--yellow); }
-  .s-high { background: rgba(63,185,80,0.15);  color: var(--green); }
-
-  /* ── Dim bars ── */
-  .dim-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 11px; }
-  .dim-lbl { flex: 0 0 160px; color: var(--muted); }
-  .dim-trk { flex: 1; background: var(--border); border-radius: 3px; height: 7px; }
-  .dim-fil { height: 7px; border-radius: 3px; width: 0; transition: width 1.2s ease; }
-  .dim-val { flex: 0 0 28px; text-align: right; font-weight: 600; color: var(--text); }
-
-  /* ════════════════════════════════════════
-     WAITING OVERLAY
-  ════════════════════════════════════════ */
-  .overlay {
-    position: fixed; inset: 0;
-    background: rgba(13,17,23,0.97);
+    background: var(--bg); color: var(--text); font-size: 1rem; line-height: 1.4;
     display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    z-index: 200;
-    transition: opacity 0.6s ease;
-  }
-  .overlay.hidden { opacity: 0; pointer-events: none; }
-
-  /* ── CLIENT VIEW — full screen, 16:9 projection layout ── */
-  .client-view {
-    width: 100%; height: 100%;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    padding: 5vh 8vw;
-    text-align: center;
   }
 
-  /* Top: eyebrow + headline */
-  .cv-top { display: flex; flex-direction: column; align-items: center; margin-bottom: 4vh; }
-  .client-view .cv-eyebrow {
-    font-size: clamp(11px, 1.4vw, 18px);
-    letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--accent); margin-bottom: clamp(8px, 1.2vh, 16px); font-weight: 700;
+  /* ── Top bar: title, tabs, controls ── */
+  .topbar {
+    display: flex; align-items: center; gap: 1.5rem; flex-shrink: 0;
+    padding: 0.6rem 1.6rem; background: var(--surface); border-bottom: 1px solid var(--border);
   }
-  .client-view h2 {
-    font-size: clamp(32px, 5vw, 64px);
-    font-weight: 800; color: var(--text);
-    line-height: 1.15; margin-bottom: clamp(8px, 1.2vh, 16px);
+  .topbar h1 { font-size: 1.35rem; font-weight: 700; white-space: nowrap; }
+  .tabs { display: flex; gap: 0.4rem; flex: 1; justify-content: center; }
+  .tab {
+    background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 0.45rem; padding: 0.4rem 1.1rem; font-size: 1.15rem; font-weight: 600; cursor: pointer;
   }
-  .client-view .cv-sub {
-    font-size: clamp(14px, 1.6vw, 22px);
-    color: var(--muted); line-height: 1.6;
-    max-width: 700px;
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tab .n { font-weight: 400; opacity: 0.7; margin-left: 0.4rem; font-size: 0.95rem; }
+  .ctrl { display: flex; gap: 0.5rem; }
+  .btn {
+    background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 0.45rem; padding: 0.45rem 0.9rem; font-size: 1rem; font-weight: 600; cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--border); color: var(--text); }
+
+  /* ── Page frame ── */
+  .main { flex: 1; min-height: 0; display: flex; padding: 0.9rem 1.6rem 1.1rem; }
+  .panel { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+
+  .head .eyebrow {
+    font-size: 1.05rem; font-weight: 700; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.15rem;
+  }
+  .head .qtext { font-size: 1.75rem; font-weight: 600; line-height: 1.3; max-width: 97%; }
+
+  .grid3 { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.3fr 1fr 1.15fr; gap: 0.9rem; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.7rem;
+    padding: 0.9rem 1.2rem; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden;
+  }
+  .card h3 {
+    font-size: 1rem; font-weight: 700; color: var(--muted); flex-shrink: 0;
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.6rem;
   }
 
-  /* Middle: QR + right panel side by side */
-  .cv-middle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6vw;
+  /* ── Column chart (rating distribution) ── */
+  .chart5 { flex: 1; min-height: 0; display: flex; gap: 0.8rem; }
+  .col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .slot { flex: 1; min-height: 0; position: relative; border-bottom: 1px solid var(--border); }
+  .plot { position: absolute; top: 4.4rem; bottom: 0; left: 12%; right: 12%; }
+  .fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 0.4rem 0.4rem 0 0; transition: height 0.4s ease; }
+  .fill .v { position: absolute; bottom: 100%; left: -30%; right: -30%; text-align: center; padding-bottom: 0.25rem; line-height: 1.1; }
+  .fill .v b { display: block; font-size: 2.1rem; }
+  .fill .v span { font-size: 1.15rem; color: var(--muted); }
+  .c-low  { background: var(--amber); }
+  .c-mid  { background: var(--accent); }
+  .c-high { background: var(--green); }
+  .xl { padding-top: 0.4rem; text-align: center; flex-shrink: 0; }
+  .xl .rn { font-size: 1.7rem; font-weight: 700; line-height: 1.2; }
+  .xl .anc { font-size: 1.05rem; color: var(--muted); min-height: 2.6rem; line-height: 1.2; }
+  .cnt {
+    width: 100%; max-width: 5rem; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 0.35rem; padding: 0.3rem; font-size: 1.1rem; font-weight: 700; text-align: center;
   }
-  .cv-qr-wrap {
-    background: #fff; border-radius: 16px;
-    padding: clamp(10px, 1.5vw, 18px);
-    flex-shrink: 0;
-  }
-  .cv-qr-wrap img { display: block; width: clamp(160px, 18vw, 260px); height: clamp(160px, 18vw, 260px); }
+  .cnt:focus { outline: 2px solid var(--accent); border-color: transparent; }
 
-  /* Right side of middle: URL + pulse + count + button */
-  .cv-right {
-    display: flex; flex-direction: column; align-items: flex-start;
-    gap: clamp(10px, 1.8vh, 20px); max-width: 420px; text-align: left;
+  /* ── Gauge, stacked bar, mini stats ── */
+  .gwrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  .gwrap svg { height: 100%; width: auto; max-width: 100%; }
+  .gbadge { text-align: center; min-height: 1.9rem; margin-top: 0.1rem; }
+  .badge { display: inline-block; padding: 0.15rem 1rem; border-radius: 2rem; font-size: 1.2rem; font-weight: 700; }
+  .b-low  { background: rgba(210,153,34,0.15); color: var(--amber); }
+  .b-mid  { background: rgba(59,130,212,0.15); color: var(--accent); }
+  .b-high { background: rgba(63,185,80,0.15);  color: var(--green); }
+  .b-none { background: var(--border); color: var(--muted); }
+
+  .stack { display: flex; height: 2.8rem; border-radius: 0.45rem; overflow: hidden; background: var(--border); }
+  .stack.tall { height: 3.2rem; }
+  .seg { display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 700; color: #0d1117; }
+  .seg.low  { background: var(--amber); }
+  .seg.mid  { background: var(--accent); color: #fff; }
+  .seg.high { background: var(--green); }
+  .legend { display: flex; gap: 1.2rem; font-size: 1.05rem; color: var(--muted); margin-top: 0.4rem; flex-shrink: 0; }
+  .legend i { display: inline-block; width: 0.85rem; height: 0.85rem; border-radius: 0.2rem; margin-right: 0.35rem; vertical-align: -0.05rem; }
+  .legend i.low { background: var(--amber); } .legend i.mid { background: var(--accent); } .legend i.high { background: var(--green); }
+  .mini { display: flex; gap: 1rem; margin-top: 0.7rem; flex-shrink: 0; }
+  .mini > div { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.4rem 0.8rem; text-align: center; }
+  .mini b { display: block; font-size: 2.2rem; line-height: 1.1; }
+  .mini span { font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ── Horizontal bars (priorities) ── */
+  .hrows { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-around; }
+  .hrow { display: grid; grid-template-columns: 19rem 1fr 5rem auto; gap: 0.9rem; align-items: center; }
+  .hrow.noin { grid-template-columns: 19rem 1fr 5rem; }
+  .hl b { display: block; font-size: 1.3rem; line-height: 1.2; }
+  .hl small { display: block; font-size: 1rem; color: var(--muted); line-height: 1.2; margin-top: 0.1rem; }
+  .htrk { background: var(--border); height: 1.9rem; border-radius: 0.4rem; }
+  .hfil { height: 100%; border-radius: 0.4rem; transition: width 0.4s ease; }
+  .hv { text-align: right; line-height: 1.1; }
+  .hv b { display: block; font-size: 1.7rem; }
+  .hv span { font-size: 1.1rem; color: var(--muted); }
+
+  /* ── Donut ── */
+  .dwrap { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; }
+  .dwrap svg { height: 100%; width: auto; max-width: 100%; }
+  .dc { position: absolute; text-align: center; }
+  .dc b { display: block; font-size: 4rem; line-height: 1; }
+  .dc span { font-size: 1.1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .dname { text-align: center; font-size: 1.5rem; font-weight: 700; margin-top: 0.5rem; flex-shrink: 0; }
+
+  /* ── Insights and themes ── */
+  .insights { list-style: none; overflow: hidden; }
+  .insights li {
+    padding: 0.7rem 1rem; border-left: 4px solid var(--accent); margin-bottom: 0.7rem;
+    font-size: 1.4rem; background: var(--bg); border-radius: 0 0.4rem 0.4rem 0; line-height: 1.35;
   }
-  .cv-url {
-    font-size: clamp(11px, 1vw, 14px); color: var(--muted);
-    word-break: break-all; line-height: 1.5;
-  }
-  .cv-url a { color: var(--accent); text-decoration: none; }
-  .cv-url a:hover { text-decoration: underline; }
-  .cv-pulse {
-    display: flex; align-items: center; gap: 8px;
-    font-size: clamp(13px, 1.4vw, 18px); color: var(--green); font-weight: 700;
-  }
-  .cv-pulse::before {
-    content: ''; width: clamp(8px, 0.9vw, 12px); height: clamp(8px, 0.9vw, 12px);
-    border-radius: 50%; background: var(--green); animation: pulse 1.4s infinite;
+  .insights li.note { border-left-color: var(--amber); }
+  .insights li.good { border-left-color: var(--green); }
+  .sum-bot .insights li { padding: 0.5rem 0.9rem; margin-bottom: 0.5rem; font-size: 1.2rem; line-height: 1.3; }
+  .insights li strong { color: var(--text); }
+  .empty { color: var(--muted); font-size: 1.2rem; }
+
+  .tiles { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.9rem; }
+  .tile {
+    background: var(--bg); border: 1px solid var(--border); border-top: 4px solid var(--accent);
+    border-radius: 0.5rem; padding: 0.7rem 1rem; font-size: 1.35rem; line-height: 1.3; font-weight: 500;
   }
 
-  /* Respondent count */
-  .cv-count-row {
-    display: flex; flex-direction: column; gap: 6px;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 10px; padding: clamp(10px, 1.5vh, 16px) clamp(14px, 2vw, 20px);
-    width: 100%;
+  /* ── Summary page ── */
+  .sum { flex: 1; min-height: 0; display: grid; grid-template-rows: auto 1.1fr 1fr; gap: 0.9rem; }
+  .headline {
+    display: flex; align-items: center; gap: 1.6rem;
+    background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--accent);
+    border-radius: 0.7rem; padding: 0.7rem 1.5rem; font-size: 1.6rem; line-height: 1.3;
   }
-  .cv-count-label {
-    font-size: clamp(11px, 1.1vw, 14px); color: var(--muted); font-weight: 500;
-    text-transform: uppercase; letter-spacing: 0.06em;
-  }
-  .cv-count-input {
-    background: var(--bg); border: 2px solid var(--accent);
-    color: var(--text); border-radius: 6px;
-    padding: 6px 10px; font-size: clamp(20px, 2.5vw, 32px); font-weight: 700;
-    width: 100%; text-align: center;
-  }
-  .cv-count-input:focus { outline: none; border-color: #60a5fa; }
-  .cv-count-input::placeholder { font-size: clamp(12px, 1.1vw, 15px); font-weight: 400; color: var(--muted); }
+  .score { flex-shrink: 0; text-align: center; padding-right: 1.6rem; border-right: 1px solid var(--border); }
+  .score b { display: block; font-size: 3.6rem; line-height: 1; }
+  .score b small { font-size: 1.3rem; color: var(--muted); font-weight: 400; }
+  .score span { font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .sum-top { display: grid; grid-template-columns: 1.05fr 1.25fr 1.1fr; gap: 0.9rem; min-height: 0; }
+  .sum-bot { display: grid; grid-template-columns: 1fr 1.7fr; gap: 0.9rem; min-height: 0; }
+  .rwrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  .rwrap svg { height: 100%; width: auto; max-width: 100%; }
+  .srows { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-around; }
+  .srow { display: grid; grid-template-columns: 12rem 1fr 4rem; gap: 0.8rem; align-items: center; }
+  .srow .sn { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+  .srow .sa { font-size: 1.9rem; font-weight: 700; text-align: right; }
+  .focus-grid { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.8rem; }
+  .focus { background: var(--bg); border: 1px solid var(--border); border-top: 4px solid var(--accent); border-radius: 0.5rem; padding: 0.6rem 0.9rem; min-height: 0; overflow: hidden; }
+  .focus-rank { font-size: 1rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  .focus-name { font-size: 1.45rem; font-weight: 700; margin: 0.05rem 0; line-height: 1.2; }
+  .focus-why { font-size: 1rem; color: var(--muted); margin-bottom: 0.35rem; line-height: 1.25; }
+  .focus ul { margin-left: 1.2rem; }
+  .focus li { font-size: 1.2rem; margin-bottom: 0.25rem; line-height: 1.25; }
 
-  /* View Live Dashboard button */
-  .cv-dashboard-btn {
-    background: var(--accent); color: #fff;
-    border: none; border-radius: 8px;
-    padding: clamp(10px, 1.4vh, 16px) clamp(18px, 2vw, 28px);
-    font-size: clamp(13px, 1.4vw, 18px); font-weight: 700;
-    cursor: pointer; transition: all 0.15s; width: 100%;
-  }
-  .cv-dashboard-btn:hover { background: #2563bc; }
+  /* ── Event name and date (header on screen and on every report page) ── */
+  .ev { min-width: 0; max-width: 30rem; }
+  .ev h1 { overflow: hidden; text-overflow: ellipsis; }
+  .evdate { font-size: 1rem; color: var(--muted); line-height: 1.2; }
+  .evdate:empty { display: none; }
 
-  /* Bottom: thin hint */
-  .cv-bottom {
-    font-size: clamp(10px, 0.9vw, 13px); color: #30363d;
-    text-align: center; padding-top: 2vh;
+  /* ── Admin page ── */
+  .adm { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0.9rem; }
+  .adm label { font-size: 1.2rem; font-weight: 600; margin: 0.6rem 0 0.3rem; }
+  .adm p { font-size: 1.2rem; line-height: 1.4; margin-bottom: 0.8rem; color: var(--text); }
+  .txt {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 0.45rem; padding: 0.6rem 0.8rem; font-size: 1.4rem; font-family: inherit; color-scheme: dark;
   }
+  .txt:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .prev { background: var(--bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.7rem 1rem; }
+  .prev b { display: block; font-size: 1.5rem; }
+  .prev span { font-size: 1.1rem; color: var(--muted); }
+  .drow { display: flex; justify-content: space-between; gap: 1rem; font-size: 1.15rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+  .btn.big { background: var(--accent); border-color: var(--accent); color: #fff; font-size: 1.3rem; padding: 0.7rem 1.6rem; }
+  .btn.big:hover { background: #2f6fb8; }
 
-  /* ── OPERATOR PANEL (hidden until Ctrl+Shift+Z) ── */
-  .operator-panel {
-    display: none;
-    text-align: center; max-width: 600px;
-    padding: 0 24px;
-  }
-  .operator-panel.show { display: block; }
-  .op-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 16px;
-  }
-  .op-title { font-size: 14px; font-weight: 700; color: var(--text); }
-  .op-close {
-    font-size: 11px; color: var(--muted); cursor: pointer;
-    background: none; border: 1px solid var(--border);
-    border-radius: 5px; padding: 4px 10px;
-  }
-  .op-close:hover { color: var(--text); background: var(--border); }
+  .adm-head .qtext { white-space: nowrap; } align-items: flex-end; justify-content: space-between; gap: 1rem; }
+  .subtabs { display: flex; gap: 0.4rem; }
+  .qlayout { flex: 1; min-height: 0; display: grid; grid-template-columns: 19rem 1fr; gap: 0.9rem; }
+  .qside .qopt { display: block; width: 100%; text-align: left; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 0.45rem; padding: 0.45rem 0.7rem; margin-bottom: 0.4rem; cursor: pointer; font-family: inherit; }
+  .qside .qopt b { display: block; font-size: 1.1rem; color: var(--accent); }
+  .qside .qopt span { font-size: 1.05rem; }
+  .qside .qopt.on { border-color: var(--accent); background: rgba(59,130,212,0.15); }
+  .qside .hint { font-size: 1rem; color: var(--muted); margin: 0.6rem 0; line-height: 1.35; }
+  .qed { overflow-y: auto; }
+  .qed > * { flex-shrink: 0; }
+  .qed textarea { min-height: 3.2rem; }
+  .qed label, .adm-head ~ .qlayout label { display: block; font-size: 1.05rem; font-weight: 600; color: var(--muted); margin: 0.6rem 0 0.25rem; }
+  .txt.sm { font-size: 1.15rem; padding: 0.45rem 0.7rem; resize: vertical; line-height: 1.35; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+  .bands { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; }
+  .optbox { border: 1px solid var(--border); border-radius: 0.55rem; padding: 0.3rem 0.9rem 0.8rem; margin-top: 0.7rem; background: var(--bg); }
+  .bands .optbox { margin-top: 0; }
+  .optnum { font-size: 1rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.5rem; }
 
-  /* QR panel (operator) */
-  .qr-panel {
-    display: flex; align-items: center; gap: 20px;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 14px 18px;
-    margin-bottom: 16px; text-align: left;
-  }
-  .qr-panel canvas { border-radius: 6px; background: #fff; padding: 6px; flex-shrink: 0; }
-  .qr-info .qr-label { font-size: 10px; color: var(--muted); text-transform: uppercase;
-                        letter-spacing: 0.08em; margin-bottom: 4px; }
-  .qr-info .qr-hint  { font-size: 12px; color: var(--text); margin-bottom: 6px; font-weight: 600; }
-  .qr-info .qr-link  { font-size: 10px; color: var(--accent); word-break: break-all; line-height: 1.4; }
+  /* ── PDF report (hidden on screen; shown only when printing) ── */
+  #report { display: none; }
+  .rhead .rlabel { margin-left: auto; font-size: 1.2rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  .cover { align-items: flex-start; justify-content: center; padding: 0 8%; gap: 1.2rem; }
+  .cv-eyebrow { font-size: 1.5rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.12em; }
+  .cv-title { font-size: 4.2rem; font-weight: 700; line-height: 1.15; }
+  .cv-date { font-size: 2.2rem; color: var(--muted); }
+  .cv-meta { font-size: 1.4rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; }
 
-  /* Steps */
-  .steps {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 20px;
-    text-align: left;
-    margin-bottom: 16px;
-  }
-  .steps h4 { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
-              letter-spacing: 0.08em; margin-bottom: 12px; }
-  .step-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
-  .step-row:last-child { margin-bottom: 0; }
-  .step-num {
-    width: 20px; height: 20px; border-radius: 50%;
-    background: var(--accent); color: #fff;
-    font-size: 10px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; margin-top: 2px;
-  }
-  .step-text { font-size: 12px; color: var(--text); line-height: 1.5; }
-  .step-text strong { color: var(--accent); }
-
-  /* Paste area */
-  .paste-area {
-    width: 100%; max-width: 480px;
-    background: var(--surface2);
-    border: 2px dashed var(--border);
-    border-radius: 8px;
-    color: var(--muted);
-    font-size: 12px;
-    font-family: "Consolas", "Courier New", monospace;
-    padding: 10px 14px;
-    resize: vertical;
-    min-height: 72px;
-    margin-bottom: 10px;
-    transition: border-color 0.15s;
-  }
-  .paste-area:focus { outline: none; border-color: var(--accent); color: var(--text); }
-
-  .paste-error {
-    display: none; font-size: 12px; color: var(--red);
-    margin-bottom: 10px;
-  }
-  .paste-error.show { display: block; }
-
-  .reveal-btn {
-    background: var(--accent); color: #fff;
-    border: none; border-radius: 8px;
-    padding: 11px 36px;
-    font-size: 14px; font-weight: 700;
-    cursor: pointer; transition: background 0.15s;
-    display: block; margin: 0 auto;
-  }
-  .reveal-btn:hover    { background: #2563bc; }
-  .reveal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .skip-link {
-    margin-top: 10px; font-size: 11px; color: var(--muted);
-    cursor: pointer; text-align: center;
-    background: none; border: none; text-decoration: underline;
-  }
-  .skip-link:hover { color: var(--text); }
-
-  /* Expected respondents row on overlay */
-  .expected-row {
-    display: flex; align-items: center; justify-content: center;
-    gap: 12px; margin-bottom: 20px;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 8px; padding: 12px 18px;
-  }
-  .expected-label {
-    font-size: 13px; color: var(--text); font-weight: 500;
-  }
-  .expected-input {
-    background: var(--bg); border: 2px solid var(--accent);
-    color: var(--text); border-radius: 6px;
-    padding: 6px 10px; font-size: 18px; font-weight: 700;
-    width: 72px; text-align: center;
-  }
-  .expected-input:focus { outline: none; border-color: #60a5fa; }
-
-  /* ════════════════════════════════════════
-     ADMIN LOGIN MODAL
-  ════════════════════════════════════════ */
-  .login-modal {
-    display: none; position: fixed; inset: 0;
-    background: rgba(13,17,23,0.92);
-    z-index: 300; align-items: center; justify-content: center;
-  }
-  .login-modal.show { display: flex; }
-  .login-box {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 32px 36px; width: 300px; text-align: center;
-  }
-  .login-box .li { font-size: 30px; margin-bottom: 12px; }
-  .login-box h3  { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-  .login-box p   { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
-  .login-input {
-    width: 100%; background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 8px; padding: 10px 14px;
-    font-size: 14px; text-align: center; letter-spacing: 0.15em; margin-bottom: 10px;
-  }
-  .login-input:focus { outline: 2px solid var(--accent); border-color: transparent; }
-  .login-err { font-size: 12px; color: var(--red); margin-bottom: 8px; min-height: 16px; }
-  .login-btn {
-    width: 100%; background: var(--accent); color: #fff; border: none;
-    border-radius: 8px; padding: 10px; font-size: 14px; font-weight: 700;
-    cursor: pointer; transition: background 0.15s;
-  }
-  .login-btn:hover { background: #2563bc; }
-  .login-cancel { margin-top: 10px; font-size: 12px; color: var(--muted); cursor: pointer;
-                  background: none; border: none; text-decoration: underline; }
-  .login-cancel:hover { color: var(--text); }
-
-  /* ── Admin bar ── */
-  .admin-bar {
-    display: none; align-items: center; gap: 10px;
-    padding: 8px 20px;
-    background: var(--surface); border-top: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .admin-bar.show { display: flex; }
-  .admin-bar span { font-size: 11px; color: var(--muted); }
-  .btn-sm {
-    padding: 5px 12px; border-radius: 5px; font-size: 11px; font-weight: 600;
-    cursor: pointer; border: 1px solid var(--border);
-    background: var(--surface2); color: var(--text); transition: background 0.15s;
-  }
-  .btn-sm:hover  { background: var(--border); }
-  .btn-sm.danger { border-color: var(--red); color: var(--red); }
-  .btn-sm.danger:hover { background: rgba(248,81,73,0.1); }
-  .spacer { flex: 1; }
-  .att-input {
-    background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 5px; padding: 4px 8px;
-    font-size: 12px; width: 52px; text-align: center;
-  }
-  .att-input:focus { outline: 2px solid var(--accent); border-color: transparent; }
-</style>
+  @page { size: 1280px 720px; margin: 0; }
+  @media print {
+    html { font-size: 10.8px; }
+    html, body { height: auto; overflow: visible; background: var(--bg); }
+    body { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .screen-only { display: none !important; }
+    #report { display: block; }
+    .rpage { width: 1280px; height: 720px; display: flex; flex-direction: column; overflow: hidden; break-after: page; page-break-after: always; background: var(--bg); }
+    .rpage:last-child { break-after: auto; page-break-after: auto; }
+    .rpage .main { padding-top: 0.9rem; }
+    * { transition: none !important; }
+  }</style>
 </head>
 <body>
 
-<!-- ══ ADMIN LOGIN MODAL ══ -->
-<div class="login-modal" id="loginModal">
-  <div class="login-box">
-    <div class="li">🔐</div>
-    <h3>Admin Access</h3>
-    <p>Enter the admin password</p>
-    <input type="password" class="login-input" id="loginInput" placeholder="••••••••" maxlength="32">
-    <div class="login-err" id="loginErr"></div>
-    <button class="login-btn" onclick="attemptLogin()">Unlock</button>
-    <button class="login-cancel" onclick="closeLogin()">Cancel</button>
-  </div>
+<div class="topbar screen-only">
+  <div class="ev"><h1 id="evTitle"></h1><div class="evdate" id="evDate"></div></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="ctrl" id="ctrl"></div>
 </div>
 
-<!-- ══ WAITING OVERLAY ══ -->
-<div class="overlay" id="overlay">
+<div class="main screen-only"><div class="panel" id="panel"></div></div>
 
-  <!-- ── CLIENT VIEW (projected on screen, visible to everyone) ── -->
-  <div class="client-view" id="clientView">
-
-    <!-- Top: heading -->
-    <div class="cv-top">
-      <div class="cv-eyebrow">Alliance Bank Strategic Transformation Day</div>
-      <h2>We'd love to hear from you</h2>
-      <div class="cv-sub">Scan the QR code to answer 5 quick questions before we begin. No right or wrong answers — just share what comes to mind.</div>
-    </div>
-
-    <!-- Middle: QR left, actions right -->
-    <div class="cv-middle">
-      <div class="cv-qr-wrap">
-        <img id="qrImg" alt="QR Code">
-      </div>
-      <div class="cv-right">
-        <div class="cv-pulse">Collecting responses…</div>
-        <div class="cv-url" style="display:none;"><a id="qrLinkDisplay" href="#" target="_blank"></a></div>
-        <div class="cv-count-row">
-          <div class="cv-count-label">Expected respondents</div>
-          <input type="number" class="cv-count-input" id="expectedInputOverlay"
-                 value="" min="1" max="200" placeholder="Enter total">
-        </div>
-        <button class="cv-dashboard-btn" onclick="skipToEmpty()">View Live Dashboard →</button>
-      </div>
-    </div>
-
-    <!-- Bottom hint -->
-    <div class="cv-bottom">Press <strong>Ctrl+Shift+Z</strong> for operator options &nbsp;·&nbsp; Dashboard updates automatically once live polling starts</div>
-
-  </div>
-
-  <!-- ── OPERATOR PANEL (hidden — press Ctrl+Shift+Z to access) ── -->
-  <div class="operator-panel" id="operatorPanel">
-    <div class="op-header">
-      <div class="op-title">🛠 Operator Panel</div>
-      <button class="op-close" onclick="toggleOperator()">✕ Close</button>
-    </div>
-
-    <!-- Small QR reminder -->
-    <div class="qr-panel">
-      <img id="qrImgSmall" alt="QR" style="width:80px;height:80px;border-radius:4px;">
-      <div class="qr-info">
-        <div class="qr-label">Form URL</div>
-        <div class="qr-hint">Share this with attendees</div>
-        <div class="qr-link" id="qrLinkSmall"></div>
-      </div>
-    </div>
-
-    <!-- Live polling status card -->
-    <div class="steps" id="liveStatusCard">
-      <h4>Live Polling Status</h4>
-      <div class="step-row">
-        <div class="step-num" id="liveStep1Num">1</div>
-        <div class="step-text" id="liveStep1Text">Gist URL configured — <strong id="liveGistStatus">checking…</strong></div>
-      </div>
-      <div class="step-row">
-        <div class="step-num">2</div>
-        <div class="step-text">Set expected respondents above → click <strong>View Live Dashboard</strong></div>
-      </div>
-      <div class="step-row">
-        <div class="step-num">3</div>
-        <div class="step-text">Dashboard polls every <strong>30 seconds</strong> — charts update automatically</div>
-      </div>
-      <div class="step-row">
-        <div class="step-num">4</div>
-        <div class="step-text" style="color:var(--muted);">Fallback: paste data manually below if internet drops</div>
-      </div>
-    </div>
-
-    <!-- Manual fallback (collapsed by default) -->
-    <button class="skip-link" id="toggleFallbackBtn" onclick="toggleFallback()" style="margin-bottom:8px; text-decoration:none; font-weight:600; color:var(--muted);">▶ Manual fallback (paste from Excel)</button>
-    <div id="fallbackSection" style="display:none; width:100%;">
-      <div class="steps" style="margin-bottom:10px; text-align:left;">
-        <h4>Manual data load</h4>
-        <div class="step-row"><div class="step-num">1</div><div class="step-text">Forms → Responses → <strong>Open in Excel</strong></div></div>
-        <div class="step-row"><div class="step-num">2</div><div class="step-text">Select all data rows (not header) → <strong>Ctrl+C</strong></div></div>
-        <div class="step-row"><div class="step-num">3</div><div class="step-text">Paste below → click <strong>Reveal Results</strong></div></div>
-      </div>
-      <textarea class="paste-area" id="pasteArea" placeholder="Paste Excel rows here (Ctrl+V)…"></textarea>
-      <div class="paste-error" id="pasteError"></div>
-      <button class="reveal-btn" id="revealBtn" onclick="loadAndReveal()">Reveal Results</button>
-    </div>
-
-    <button class="skip-link" onclick="skipToEmpty()" style="margin-top:10px;">Skip — show empty dashboard</button>
-  </div>
-
-</div>
-
-<!-- ══ TOP BAR ══ -->
-<div class="topbar">
-  <div class="topbar-left">
-    <h1>Alliance Bank Strategic Transformation Day</h1>
-    <p>Technology Readiness Poll — Results Dashboard</p>
-  </div>
-  <div class="topbar-right">
-    <div class="status-dot waiting" id="statusDot">WAITING</div>
-    <div style="font-size:11px; color:var(--muted);" id="responseCount">0 responses loaded</div>
-    <!-- QR code mini panel — always visible on dashboard -->
-    <div class="topbar-qr" id="topbarQr">
-      <img id="qrImgTopbar" alt="Form QR" title="Scan to open the check-in form">
-      <span class="topbar-qr-label">Scan to respond</span>
-    </div>
-    <!-- Back to QR screen button -->
-    <button class="topbar-back-btn" onclick="showOverlay(); resetOperator();">
-      ← QR Screen
-    </button>
-  </div>
-</div>
-
-<!-- ══ MAIN DASHBOARD ══ -->
-<div class="page">
-
-  <!-- Stat row -->
-  <div class="grid-top">
-    <div class="stat-card">
-      <div class="lbl">Responses</div>
-      <div class="val" id="statTotal">—</div>
-      <div class="sub">of <span id="statExpected">—</span> expected</div>
-    </div>
-    <div class="stat-card accent">
-      <div class="lbl">Response Rate</div>
-      <div class="val" id="statRate">—</div>
-      <div class="sub">% of expected</div>
-    </div>
-    <div class="stat-card big">
-      <div class="lbl">Overall Readiness Score</div>
-      <div class="val" id="statScore">—</div>
-      <div id="scoreBadge"></div>
-    </div>
-    <div class="stat-card">
-      <div class="lbl">Top Priority</div>
-      <div class="val" style="font-size:15px; line-height:1.3;" id="statPriority">—</div>
-      <div class="sub" id="statPriorityPct"></div>
-    </div>
-  </div>
-
-  <!-- Charts row 1 -->
-  <div class="grid-mid">
-    <div class="chart-card">
-      <h3>Readiness by Dimension</h3>
-      <div class="sub">Average score out of 5</div>
-      <div class="chart-wrap" id="radarChart"></div>
-    </div>
-    <div class="chart-card">
-      <h3>Top Technology Priority</h3>
-      <div class="sub">What matters most to the room right now</div>
-      <div class="chart-wrap" id="priorityChart"></div>
-    </div>
-  </div>
-
-  <!-- Charts row 2 -->
-  <div class="grid-bot">
-    <div class="chart-card">
-      <h3>Dimension Score Detail</h3>
-      <div class="sub">Averaged ratings · 1 = low · 5 = high</div>
-      <div style="margin-top:10px; flex:1; display:flex; flex-direction:column; justify-content:center;">
-        <div class="dim-row"><div class="dim-lbl">Infrastructure & Ops</div><div class="dim-trk"><div class="dim-fil" id="df1" style="background:#3b82d4;"></div></div><div class="dim-val" id="dv1">—</div></div>
-        <div class="dim-row"><div class="dim-lbl">App Security & Automation</div><div class="dim-trk"><div class="dim-fil" id="df2" style="background:#7c5cd8;"></div></div><div class="dim-val" id="dv2">—</div></div>
-        <div class="dim-row"><div class="dim-lbl">AI Adoption</div><div class="dim-trk"><div class="dim-fil" id="df3" style="background:#10b981;"></div></div><div class="dim-val" id="dv3">—</div></div>
-        <div class="dim-row"><div class="dim-lbl">Data-Driven Innovation</div><div class="dim-trk"><div class="dim-fil" id="df4" style="background:#f59e0b;"></div></div><div class="dim-val" id="dv4">—</div></div>
-      </div>
-    </div>
-    <div class="chart-card">
-      <h3>Readiness Score</h3>
-      <div class="sub">Overall score interpretation</div>
-      <div class="chart-wrap" id="gaugeChart"></div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ══ ADMIN BAR ══ -->
-<div class="admin-bar" id="adminBar">
-  <span>Expected attendees:</span>
-  <input type="number" class="att-input" id="expectedInput" value="" min="1" max="200" placeholder="—">
-  <div class="spacer"></div>
-  <button class="btn-sm" onclick="showOverlay()">↩ Re-load Responses</button>
-  <button class="btn-sm danger" onclick="clearDashboard()">Clear Dashboard</button>
-  <button class="btn-sm" onclick="logoutAdmin()" style="border-color:#8b949e; margin-left:6px;">Lock Admin</button>
-</div>
+<div id="report"></div>
 
 <script>
-// ══════════════════════════════════════════════════════════════════════════
-// CONFIGURATION — set GIST_RAW_URL after creating your GitHub Gist
-// Step-by-step setup guide is in README.md
-// ══════════════════════════════════════════════════════════════════════════
-// Replace the placeholder below with your Gist raw URL.
-// It looks like: https://gist.githubusercontent.com/jennifermoreira/XXXX/raw/responses.json
-const GIST_RAW_URL = 'https://gist.github.com/jennifermoreira/d5af05381df78b6541dee777bfc73ae8';
-const POLL_INTERVAL_MS = 30000; // poll every 30 seconds
-
-// ══ Constants ══════════════════════════════════════════════════════════════
-const ADMIN_PASSWORD = 'admin123';
-
-const PRIORITY_LABELS = {
-  infra:    'Infrastructure & Resilience',
-  security: 'App Security & Automation',
-  ai:       'Scaling AI to Production',
-  data:     'Data Foundation & Innovation',
-  ela:      'Maximise Tech Investment / ELA',
+// ══ Poll definition (matches the questions in attendee/index.html) ═══════════
+// All wording is client-facing: neutral, constructive and high level.
+const DEFAULT_RATINGS = {
+  q1: {
+        text: "How well set up do you feel your organisation's systems and platforms are to handle today's demands — keeping services running smoothly, handling peak loads, and staying on top of what's happening across your environment?",
+        lo: 'Significant gaps', hi: 'Really good place',
+        meaning: {
+          low:  'Respondents see clear room to strengthen platform resilience, capacity and visibility.',
+          mid:  'Platforms are coping well day to day, with scope to make resilience and visibility more consistent.',
+          high: 'Platforms are viewed as reliable, scalable and well monitored.' },
+        themes: {
+          low:  ['Strengthening resilience and capacity planning for critical services',
+                 'Building end-to-end visibility across hybrid environments',
+                 'Simplifying operational tooling for a clearer, single view'],
+          mid:  ['Extending monitoring and resilience consistently across the estate',
+                 'Moving from reactive to proactive, automated operations'],
+          high: ['Optimising cost and efficiency of established platforms',
+                 'Sharing leading practices across teams'] } },
+  q2: {
+        text: "How comfortable are you with where your organisation stands when it comes to protecting your applications and keeping on top of security and compliance — especially as things move faster with new technologies?",
+        lo: 'Still working through it', hi: 'Well covered',
+        meaning: {
+          low:  'Respondents see room to strengthen security and compliance practices, particularly as new technologies are adopted.',
+          mid:  'Confidence is moderate, with scope to apply controls more consistently and reduce manual effort.',
+          high: 'Respondents feel well covered on application security and compliance.' },
+        themes: {
+          low:  ['Automating security and compliance activity to reduce manual effort',
+                 'Embedding security earlier in the delivery lifecycle',
+                 'Governance for new technologies such as AI'],
+          mid:  ['Applying security and compliance controls more consistently',
+                 'Automating high-volume compliance activity',
+                 'Aligning security, compliance and engineering around shared tooling'],
+          high: ['Staying aligned with evolving regulatory and AI-related expectations',
+                 'Keeping security in step with faster release cycles'] } },
+  q3: {
+        text: "Where would you say your organisation genuinely is when it comes to putting AI to work — not just exploring it, but actually using it to make a difference day to day?",
+        lo: 'Early days', hi: 'Delivering value',
+        meaning: {
+          low:  'AI is largely at an exploratory stage, with limited day-to-day impact so far.',
+          mid:  'AI is in use in places, with value not yet realised consistently across the organisation.',
+          high: 'AI is already delivering day-to-day value for many.' },
+        themes: {
+          low:  ['Prioritising a small number of high-value AI use cases',
+                 'Establishing AI governance and ownership early',
+                 'Ensuring data and platform readiness to support AI'],
+          mid:  ['Moving promising pilots into production',
+                 'Defining measurable business outcomes for AI',
+                 'A repeatable path from pilot to production'],
+          high: ['Scaling AI responsibly, with monitoring, risk and cost control',
+                 'Measuring and communicating the business value delivered'] } },
+  q4: {
+        text: "When your teams need data to make a quick decision or launch something new, how easy is it to get to the right information — with confidence that it's accurate and up to date?",
+        lo: 'Often a struggle', hi: 'Smooth and reliable',
+        meaning: {
+          low:  'Accessing accurate, timely data is often difficult, which can slow decisions and limit the value of AI.',
+          mid:  'Data access works well in places but is not yet consistent, and trust varies by team.',
+          high: 'Teams can reach trusted data quickly when they need it.' },
+        themes: {
+          low:  ['Improving data quality, ownership and accessibility for key decisions',
+                 'Enabling governed self-service access to data',
+                 'Establishing data foundations that AI initiatives can build on'],
+          mid:  ['Increasing visibility of data quality and freshness',
+                 'Clear data ownership and discoverability',
+                 'Reducing manual hand-offs in data requests'],
+          high: ['Using strong data access to accelerate real-time and AI use cases',
+                 'Sustaining data trust as volumes and sources grow'] } }
 };
+const RATING_KEYS = ['q1', 'q2', 'q3', 'q4'];
+const qLabel = k => 'Question ' + k.slice(1);   // questions are identified by number only, as the audience spans departments
 
-// Microsoft Forms exports Q5 as full text — map common label fragments to keys
-const PRIORITY_MAP = [
-  ['infra',    ['infra','reliable','visible','platform','system']],
-  ['security', ['secur','compliance','tighten']],
-  ['ai',       ['ai','artificial','experiment','machine']],
-  ['data',     ['data','access','trust','act on']],
-  ['ela',      ['ela','invest','licensing','value from']],
+const DEFAULT_Q5_TEXT = 'If you had to pick one area your organisation most needs to make progress on over the next 12 months, which would it be?';
+const DEFAULT_PRIORITIES = [
+  { key: 'infra',    label: 'Systems & platforms reliable and visible end-to-end', short: 'Infrastructure & Resilience', dim: 'q1',
+    themes: ['Resilience and end-to-end observability across critical services',
+             'Reliability targets and a phased roadmap for platform modernisation'] },
+  { key: 'security', label: 'Tighter security, less manual compliance', short: 'App Security & Automation', dim: 'q2',
+    themes: ['Automating security and compliance controls',
+             'Embedding security earlier in delivery as new technologies are adopted'] },
+  { key: 'ai',       label: 'Moving from AI experiments to AI in the business', short: 'Scaling AI to Production', dim: 'q3',
+    themes: ['Moving AI pilots into production with the right governance',
+             'Platform and data foundations that allow AI to scale'] },
+  { key: 'data',     label: 'Data easier to access, trust and act on', short: 'Data Foundation & Innovation', dim: 'q4',
+    themes: ['Trusted, accessible data for faster decisions',
+             'Data ownership, quality and governance to build confidence'] },
+  { key: 'ela',      label: 'Getting the most out of technology already invested in', short: 'Maximise Tech Investment / ELA', dim: null,
+    note: 'The room wants to get more from the technology it already has, pointing to usage and adoption as much as new capability.',
+    themes: ['Reviewing how current entitlements are being used',
+             'Aligning existing capabilities to the priorities identified today',
+             'Ongoing tracking of the value realised'] }
 ];
+const PCOL = ['#3b82d4', '#7c5cd8', '#10b981', '#f59e0b', '#06b6d4'];
 
-let adminUnlocked = false;
-let operatorVisible = false;
-let radarChart, priorityChart, gaugeChart;
-let pollTimer = null;
-let lastResponseCount = -1;
-
-// ══ Toggle fallback paste section ══════════════════════════════════════════
-function toggleFallback() {
-  const sec = document.getElementById('fallbackSection');
-  const btn = document.getElementById('toggleFallbackBtn');
-  const open = sec.style.display === 'none';
-  sec.style.display = open ? 'block' : 'none';
-  btn.textContent   = (open ? '▼' : '▶') + ' Manual fallback (paste from Excel)';
-}
-
-// ══ Live polling engine ════════════════════════════════════════════════════
-function gistConfigured() {
-  return GIST_RAW_URL && GIST_RAW_URL !== 'PASTE_YOUR_GIST_RAW_URL_HERE';
-}
-
-function startLivePolling() {
-  if (!gistConfigured()) return;
-  // Fetch immediately, then on interval
-  fetchGistData();
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(fetchGistData, POLL_INTERVAL_MS);
-}
-
-function stopLivePolling() {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-}
-
-async function fetchGistData() {
-  if (!gistConfigured()) return;
-  try {
-    // Append timestamp to bust CDN cache on every poll
-    const url = GIST_RAW_URL + (GIST_RAW_URL.includes('?') ? '&' : '?') + '_t=' + Date.now();
-    const res  = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-
-    // Expect { "responses": [ {q1,q2,q3,q4,q5}, ... ] }
-    const rows = Array.isArray(json.responses) ? json.responses : [];
-
-    if (rows.length !== lastResponseCount) {
-      lastResponseCount = rows.length;
-      if (rows.length > 0) {
-        updateDashboard(rows);
-        updatePollStatus('live', rows.length + ' responses · updated ' + new Date().toLocaleTimeString());
-      } else {
-        updatePollStatus('waiting', 'Waiting for first response…');
-      }
-    }
-  } catch (err) {
-    console.warn('Gist poll failed:', err);
-    updatePollStatus('error', 'Poll error — retrying…');
-  }
-}
-
-function updatePollStatus(state, msg) {
-  const dot = document.getElementById('statusDot');
-  const cnt = document.getElementById('responseCount');
-  if (state === 'live') {
-    dot.className = 'status-dot live';
-    dot.textContent = 'LIVE';
-  } else if (state === 'error') {
-    dot.className = 'status-dot waiting';
-    dot.textContent = 'POLL ERROR';
-  }
-  cnt.textContent = msg;
-}
-
-function checkGistOnLoad() {
-  const statusEl = document.getElementById('liveGistStatus');
-  if (!gistConfigured()) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--yellow);">⚠ Not configured — see README</span>';
-    return;
-  }
-  // Quick reachability check
-  fetch(GIST_RAW_URL + '?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
-    .then(r => {
-      if (statusEl) statusEl.innerHTML = r.ok
-        ? '<span style="color:var(--green);">✓ Connected</span>'
-        : '<span style="color:var(--red);">✗ Unreachable (HTTP ' + r.status + ')</span>';
-    })
-    .catch(() => {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--red);">✗ Network error</span>';
+// ══ Editable poll definition ═════════════════════════════════════════════════
+// The DEFAULT_* values above are the starting wording. Edits made on the Admin page are saved in the
+// browser and used in their place. RATINGS and PRIORITIES always point at the live copy.
+let RATINGS, PRIORITIES;
+const clonePoll = () => JSON.parse(JSON.stringify({ ratings: DEFAULT_RATINGS, q5Text: DEFAULT_Q5_TEXT, priorities: DEFAULT_PRIORITIES }));
+function applyPoll(p) { RATINGS = p.ratings; PRIORITIES = p.priorities; }
+function mergePoll(s) {   // anything missing from saved data falls back to the defaults
+  const p = clonePoll();
+  if (!s || typeof s !== 'object') return p;
+  const str = (v, d) => typeof v === 'string' ? v : d;
+  const lines = (v, d) => Array.isArray(v) ? v.map(String) : d;
+  p.q5Text = str(s.q5Text, p.q5Text);
+  RATING_KEYS.forEach(k => {
+    const r = p.ratings[k], x = (s.ratings || {})[k];
+    if (!x) return;
+    ['text', 'lo', 'hi'].forEach(f => r[f] = str(x[f], r[f]));
+    ['low', 'mid', 'high'].forEach(b => {
+      r.meaning[b] = str((x.meaning || {})[b], r.meaning[b]);
+      r.themes[b] = lines((x.themes || {})[b], r.themes[b]);
     });
+  });
+  p.priorities.forEach((r, i) => {
+    const x = (s.priorities || [])[i];
+    if (!x) return;
+    ['label', 'short', 'note'].forEach(f => r[f] = str(x[f], r[f]));
+    r.themes = lines(x.themes, r.themes);
+  });
+  return p;
 }
 
-// ══ Operator panel toggle (overlay — no password, just a quick flip) ════════
-function toggleOperator() {
-  operatorVisible = !operatorVisible;
-  document.getElementById('clientView').style.display    = operatorVisible ? 'none'  : 'flex';
-  document.getElementById('operatorPanel').classList.toggle('show', operatorVisible);
+// ══ State ════════════════════════════════════════════════════════════════════
+const STORE_KEY = 'abm-poll-insights-v1';
+let counts = { q1: [0,0,0,0,0], q2: [0,0,0,0,0], q3: [0,0,0,0,0], q4: [0,0,0,0,0], q5: [0,0,0,0,0] };
+let ev = { title: 'Alliance Bank Strategic Transformation Day', date: '' };   // event details, edited on the Admin page
+let current = 'q1';
+let poll = clonePoll();   // question wording, edited on the Admin page
+let adminTab = 'event';
+let editMode = true;   // shows the count entry boxes; turn off when presenting
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE_KEY));
+  if (saved && saved.counts) counts = saved.counts;
+  if (saved && saved.poll) poll = mergePoll(saved.poll);
+  if (saved && saved.ev) ev = { title: String(saved.ev.title || ''), date: String(saved.ev.date || '') };
+} catch (e) { /* ignore: file:// storage may be unavailable */ }
+applyPoll(poll);
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ counts, ev, poll })); } catch (e) {}
 }
 
-// ══ Admin login (bottom bar — password protected) ══════════════════════════
-function openLogin() {
-  document.getElementById('loginInput').value = '';
-  document.getElementById('loginErr').textContent = '';
-  document.getElementById('loginModal').classList.add('show');
-  setTimeout(() => document.getElementById('loginInput').focus(), 80);
+// ══ Maths ════════════════════════════════════════════════════════════════════
+const sum = a => a.reduce((x, y) => x + y, 0);
+function ratingStats(arr) {
+  const n = sum(arr);
+  if (!n) return { n: 0 };
+  const avg = arr.reduce((t, c, i) => t + c * (i + 1), 0) / n;
+  const sd = Math.sqrt(arr.reduce((t, c, i) => t + c * Math.pow(i + 1 - avg, 2), 0) / n);
+  const pct = (from, to) => Math.round(sum(arr.slice(from, to)) / n * 100);
+  let run = 0, median = 5;
+  for (let i = 0; i < 5; i++) { run += arr[i]; if (run >= n / 2) { median = i + 1; break; } }
+  return { n, avg, sd, median, ones: pct(0, 1), low: pct(0, 2), mid: pct(2, 3), high: pct(3, 5) };
 }
-function closeLogin() {
-  document.getElementById('loginModal').classList.remove('show');
+const band = avg => avg < 2.5 ? 'low' : avg < 3.5 ? 'mid' : 'high';
+const bandLabel = { low: 'Opportunity', mid: 'Developing', high: 'Strong' };
+const bandClass = { low: 'b-low', mid: 'b-mid', high: 'b-high' };
+const bandCls   = { low: 'note', mid: '', high: 'good' };
+const bandColor = { low: '#d29922', mid: '#3b82d4', high: '#3fb950' };
+
+function prioStats() {
+  const arr = counts.q5, n = sum(arr);
+  const ranked = PRIORITIES.map((p, i) => ({ p, i, c: arr[i], pct: n ? Math.round(arr[i] / n * 100) : 0 }))
+                           .sort((a, b) => b.c - a.c);
+  return { n, ranked };
 }
-function attemptLogin() {
-  if (document.getElementById('loginInput').value === ADMIN_PASSWORD) {
-    adminUnlocked = true;
-    closeLogin();
-    document.getElementById('adminBar').classList.add('show');
+function overallScore() {
+  const have = RATING_KEYS.filter(k => sum(counts[k]));
+  if (have.length < 4) return null;
+  return Math.round((sum(have.map(k => ratingStats(counts[k]).avg)) / 4 - 1) / 4 * 100);
+}
+const scoreTag = s => s < 50 ? 'Emerging' : s < 75 ? 'Developing' : 'Advanced';
+const sampleNote = n => ({ cls: 'note', html: `<strong>Based on ${n} response${n === 1 ? '' : 's'} so far.</strong> Results will firm up as more come in.` });
+
+// ══ Per-question insights ════════════════════════════════════════════════════
+function ratingInsights(key) {
+  const d = RATINGS[key], s = ratingStats(counts[key]);
+  if (!s.n) return { items: [], themes: [] };
+  const b = band(s.avg), items = [], themes = d.themes[b].slice();
+  const polarised = s.low >= 25 && s.high >= 25;
+
+  items.push({ cls: bandCls[b], html: `<strong>Average ${s.avg.toFixed(1)} / 5.</strong> ${d.meaning[b]}` });
+
+  if (polarised) {
+    items.push({ cls: 'note', html: `<strong>Experiences differ across the room.</strong> ${s.low}% rated this 1–2 while ${s.high}% rated it 4–5, so the average hides a wide range of experience between teams.` });
+    themes.unshift('Sharing leading practices across teams to bring more consistency');
+  } else if (s.sd < 0.8) {
+    items.push({ cls: '', html: `<strong>Strong alignment.</strong> Answers cluster closely, so the average reflects the view of the room well.` });
+  }
+  if (s.mid >= 40) {
+    items.push({ cls: 'note', html: `<strong>Many chose the middle rating (${s.mid}%).</strong> This can indicate an uneven or less visible picture.` });
+    themes.push('Establishing a clear baseline so decisions rest on measured insight');
+  }
+  if (b !== 'low' && s.ones >= 15) {
+    items.push({ cls: 'note', html: `<strong>Mixed experience.</strong> ${s.ones}% rated 1 even though the overall result is ${bandLabel[b].toLowerCase()}. It may be worth understanding what sits behind this.` });
+  }
+  if (s.low >= 40) {
+    items.push({ cls: 'note', html: `<strong>A large share (${s.low}%) rated this 1–2</strong>, pointing to clear room for improvement.` });
+  }
+  if (s.n < 10) items.push(sampleNote(s.n));
+  return { items, themes };
+}
+
+function prioInsights() {
+  const { n, ranked } = prioStats();
+  if (!n) return { items: [], themes: [] };
+  const items = [], top = ranked[0], second = ranked[1], margin = top.pct - second.pct;
+  const spread = margin < 10;
+  const themes = top.p.themes.slice();
+
+  if (!spread && top.pct >= 40) {
+    items.push({ cls: 'good', html: `<strong>Clear priority: ${top.p.short} (${top.pct}%).</strong> A ${margin}-point lead over ${second.p.short}.` });
+  } else if (spread) {
+    items.push({ cls: 'note', html: `<strong>Priorities are spread across several areas.</strong> ${top.p.short} (${top.pct}%) and ${second.p.short} (${second.pct}%) are closely matched.` });
+    themes.unshift('Agreeing a shortlist of priorities and sequencing them by impact and readiness');
   } else {
-    document.getElementById('loginErr').textContent = 'Incorrect password.';
-    document.getElementById('loginInput').value = '';
-    document.getElementById('loginInput').focus();
+    items.push({ cls: '', html: `<strong>Leading priority: ${top.p.short} (${top.pct}%)</strong>, ahead of ${second.p.short} (${second.pct}%) but not an outright majority.` });
   }
-}
-function logoutAdmin() {
-  adminUnlocked = false;
-  document.getElementById('adminBar').classList.remove('show');
-}
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
-    e.preventDefault();
-    // If overlay is showing: toggle between client view and operator panel
-    const overlay = document.getElementById('overlay');
-    const overlayVisible = overlay.style.display !== 'none' && !overlay.classList.contains('hidden');
-    if (overlayVisible) {
-      toggleOperator();
-    } else {
-      // Dashboard is showing: toggle admin bar
-      adminUnlocked ? logoutAdmin() : openLogin();
-    }
+  if (!spread && second.c > 0 && top.pct + second.pct >= 70) {
+    items.push({ cls: '', html: `<strong>Two areas stand out.</strong> ${top.p.short} and ${second.p.short} together account for ${top.pct + second.pct}% of votes.` });
   }
-  if (e.key === 'Enter' && document.getElementById('loginModal').classList.contains('show')) {
-    attemptLogin();
-  }
-});
+  const zero = ranked.filter(r => r.c === 0).map(r => r.p.short);
+  if (zero.length) items.push({ cls: '', html: `<strong>No votes for:</strong> ${zero.join(', ')}.` });
 
-// ══ Overlay helpers ════════════════════════════════════════════════════════
-function showOverlay() {
-  const o = document.getElementById('overlay');
-  o.style.display = 'flex';
-  o.classList.remove('hidden');
-}
-function resetOperator() {
-  // Always return to client view (not operator panel) when coming back
-  operatorVisible = false;
-  document.getElementById('clientView').style.display = 'grid';
-  document.getElementById('operatorPanel').classList.remove('show');
-}
-function hideOverlay() {
-  const o = document.getElementById('overlay');
-  o.classList.add('hidden');
-  setTimeout(() => { o.style.display = 'none'; }, 650);
-}
-function skipToEmpty() {
-  // Sync overlay expected input → admin input before hiding overlay
-  const overlayInput = document.getElementById('expectedInputOverlay');
-  const adminInput   = document.getElementById('expectedInput');
-  if (overlayInput.value) adminInput.value = overlayInput.value;
-  hideOverlay();
-  // Start live polling as soon as the dashboard is revealed
-  if (gistConfigured()) {
-    startLivePolling();
-    setStatusPolling();
+  if (top.p.dim) {
+    const s = ratingStats(counts[top.p.dim]);
+    if (s.n) {
+      const b = band(s.avg), nm = qLabel(top.p.dim);
+      items.push(b === 'low'
+        ? { cls: 'good', html: `<strong>Priority is consistent with the ratings.</strong> ${nm} was also among the lower-rated areas (${s.avg.toFixed(1)}).` }
+        : b === 'high'
+        ? { cls: '', html: `<strong>Ambition to go further.</strong> ${nm} was rated strongly (${s.avg.toFixed(1)}) and is still the top priority, which suggests appetite to build on a solid base.` }
+        : { cls: '', html: `<strong>Priority and rating line up.</strong> ${nm} was rated ${s.avg.toFixed(1)} (developing), with clear appetite to progress.` });
+    }
   } else {
-    setStatusLive();
-  }
-}
-function setStatusLive() {
-  const d = document.getElementById('statusDot');
-  d.className = 'status-dot live';
-  d.textContent = 'RESULTS LOADED';
-}
-function setStatusPolling() {
-  const d = document.getElementById('statusDot');
-  d.className = 'status-dot live';
-  d.textContent = 'LIVE';
-  document.getElementById('responseCount').textContent = 'Polling for responses…';
-}
-
-// ══ Parse pasted data ══════════════════════════════════════════════════════
-// Supports two formats:
-//   A) Tab-separated plain numbers: "3\t4\t2\t5\tinfra"  (manual entry / CSV)
-//   B) Microsoft Forms Excel export: columns may have extra header text;
-//      rows contain the question text answers for Q5
-function parseRows(raw) {
-  const lines = raw.trim().split('\n').filter(l => l.trim());
-  const rows = [];
-  const errors = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const cols = lines[i].split('\t').map(c => c.trim());
-
-    // Skip header rows — detect by checking if first 4 cols are non-numeric
-    const first4 = cols.slice(0, 4);
-    if (first4.every(c => isNaN(Number(c)) || c === '')) continue;
-
-    // Try to find 4 numeric values and 1 text value
-    // Forms may export with extra columns (timestamp, name, email stripped already)
-    // We look for the first 4 consecutive numeric columns
-    const numCols = [];
-    let textCol = '';
-    for (const c of cols) {
-      const n = Number(c);
-      if (!isNaN(n) && c !== '' && numCols.length < 4) {
-        numCols.push(n);
-      } else if (c !== '' && numCols.length === 4 && textCol === '') {
-        textCol = c.toLowerCase();
-      }
-    }
-
-    if (numCols.length < 4) {
-      errors.push(`Row ${i + 1}: could not find 4 numeric ratings`);
-      continue;
-    }
-
-    const [q1, q2, q3, q4] = numCols;
-    if ([q1,q2,q3,q4].some(v => v < 1 || v > 5)) {
-      errors.push(`Row ${i + 1}: ratings must be 1–5`);
-      continue;
-    }
-
-    // Resolve Q5 — accept key directly or match text
-    let q5 = '';
-    const rawQ5 = cols[cols.length - 1].toLowerCase();
-    if (PRIORITY_LABELS[rawQ5]) {
-      q5 = rawQ5;
-    } else {
-      for (const [key, fragments] of PRIORITY_MAP) {
-        if (fragments.some(f => rawQ5.includes(f))) { q5 = key; break; }
-      }
-    }
-    if (!q5) {
-      // Default to 'infra' if unresolvable but warn
-      q5 = 'infra';
-      errors.push(`Row ${i + 1}: Q5 value "${cols[cols.length-1]}" not recognised — defaulted to Infrastructure`);
-    }
-
-    rows.push({ q1, q2, q3, q4, q5 });
+    items.push({ cls: 'good', html: `<strong>${top.p.short} is the top priority.</strong> ${top.p.note || 'It is not tied to one of the rated areas, so it adds a separate signal alongside the ratings.'}` });
   }
 
-  return { rows, errors };
-}
-
-// ══ Load & reveal ══════════════════════════════════════════════════════════
-function loadAndReveal() {
-  const raw = document.getElementById('pasteArea').value;
-  document.getElementById('pasteError').classList.remove('show');
-
-  if (!raw.trim()) {
-    showError('Please paste your response data first.');
-    return;
-  }
-
-  const { rows, errors } = parseRows(raw);
-
-  if (rows.length === 0) {
-    showError('No valid rows found. Make sure you copied the data rows (not headers) from Excel.\n' + errors.join('\n'));
-    return;
-  }
-
-  if (errors.length > 0) {
-    // Non-fatal — show warning but continue
-    console.warn('Parse warnings:', errors);
-  }
-
-  updateDashboard(rows);
-  hideOverlay();
-  setStatusLive();
-}
-
-function showError(msg) {
-  const el = document.getElementById('pasteError');
-  el.textContent = msg;
-  el.classList.add('show');
-}
-
-// ══ Dashboard update ═══════════════════════════════════════════════════════
-function updateDashboard(rows) {
-  const total = rows.length;
-  const overlayVal = parseInt(document.getElementById('expectedInputOverlay').value);
-  const adminVal   = parseInt(document.getElementById('expectedInput').value);
-  const expected   = overlayVal || adminVal || 40;
-
-  // Aggregates
-  const sums = { q1: 0, q2: 0, q3: 0, q4: 0 };
-  const pc   = { infra: 0, security: 0, ai: 0, data: 0, ela: 0 };
-  for (const r of rows) {
-    sums.q1 += r.q1; sums.q2 += r.q2; sums.q3 += r.q3; sums.q4 += r.q4;
-    if (pc[r.q5] !== undefined) pc[r.q5]++;
-  }
-  const avgs = {
-    q1: +(sums.q1 / total).toFixed(2),
-    q2: +(sums.q2 / total).toFixed(2),
-    q3: +(sums.q3 / total).toFixed(2),
-    q4: +(sums.q4 / total).toFixed(2),
-  };
-  const overallRaw = (avgs.q1 + avgs.q2 + avgs.q3 + avgs.q4) / 4;
-  const score = Math.round(((overallRaw - 1) / 4) * 100);
-
-  // ── Stat cards ──
-  document.getElementById('statTotal').textContent    = total;
-  document.getElementById('statExpected').textContent = expected;
-  document.getElementById('statRate').textContent     = Math.round((total / expected) * 100) + '%';
-  document.getElementById('statScore').textContent    = score;
-  document.getElementById('responseCount').textContent = total + ' responses loaded';
-
-  const badge = document.getElementById('scoreBadge');
-  if      (score < 50) badge.innerHTML = '<span class="score-badge s-low">Early Stage</span>';
-  else if (score < 75) badge.innerHTML = '<span class="score-badge s-mid">Developing</span>';
-  else                 badge.innerHTML = '<span class="score-badge s-high">Advanced</span>';
-
-  // Top priority
-  const topKey = Object.keys(pc).sort((a,b) => pc[b] - pc[a])[0];
-  document.getElementById('statPriority').textContent    = PRIORITY_LABELS[topKey];
-  document.getElementById('statPriorityPct').textContent = Math.round((pc[topKey] / total) * 100) + '% of respondents';
-
-  // ── Radar ──
-  radarChart.setOption({
-    series: [{ data: [{ value: [avgs.q1, avgs.q2, avgs.q3, avgs.q4], name: 'Score' }] }]
-  });
-
-  // ── Priority bar ──
-  priorityChart.setOption({
-    series: [{ data: [pc.infra, pc.security, pc.ai, pc.data, pc.ela] }]
-  });
-
-  // ── Dim bars ──
-  setDimBar(1, avgs.q1); setDimBar(2, avgs.q2);
-  setDimBar(3, avgs.q3); setDimBar(4, avgs.q4);
-
-  // ── Gauge ──
-  updateGauge(score);
-}
-
-function setDimBar(i, val) {
-  const pct = ((val - 1) / 4) * 100;
-  document.getElementById('df' + i).style.width = pct + '%';
-  document.getElementById('dv' + i).textContent = val ? val.toFixed(1) : '—';
-}
-
-// ══ Chart init ═════════════════════════════════════════════════════════════
-function initCharts() {
-  radarChart = echarts.init(document.getElementById('radarChart'));
-  radarChart.setOption({
-    radar: {
-      indicator: [
-        { name: 'Infrastructure', max: 5 },
-        { name: 'App Security',   max: 5 },
-        { name: 'AI Adoption',    max: 5 },
-        { name: 'Data Innovation',max: 5 },
-      ],
-      shape: 'polygon', splitNumber: 5,
-      axisName: { color: '#8b949e', fontSize: 11 },
-      splitLine: { lineStyle: { color: '#30363d' } },
-      splitArea: { areaStyle: { color: ['rgba(59,130,212,0.03)','rgba(59,130,212,0.06)'] } },
-      axisLine:  { lineStyle: { color: '#30363d' } },
-    },
-    series: [{
-      type: 'radar',
-      data: [{ value: [0,0,0,0], name: 'Score' }],
-      lineStyle:  { color: '#3b82d4', width: 2 },
-      areaStyle:  { color: 'rgba(59,130,212,0.18)' },
-      symbol: 'circle', symbolSize: 6,
-      itemStyle:  { color: '#3b82d4' },
-    }],
-  });
-
-  priorityChart = echarts.init(document.getElementById('priorityChart'));
-  priorityChart.setOption({
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 160, right: 40, top: 8, bottom: 16 },
-    xAxis: { type: 'value', splitLine: { lineStyle: { color: '#30363d' } },
-             axisLabel: { color: '#8b949e', fontSize: 10 } },
-    yAxis: { type: 'category', data: Object.values(PRIORITY_LABELS),
-             axisLabel: { color: '#8b949e', fontSize: 10 } },
-    color: ['#3b82d4'],
-    series: [{ type: 'bar', data: [0,0,0,0,0], barMaxWidth: 18,
-               itemStyle: { borderRadius: [0,4,4,0] },
-               label: { show: true, position: 'right', color: '#e6edf3', fontSize: 11 } }],
-  });
-
-  gaugeChart = echarts.init(document.getElementById('gaugeChart'));
-  updateGauge(0);
-}
-
-function updateGauge(score) {
-  const color = score >= 75 ? '#3fb950' : score >= 50 ? '#d29922' : '#f85149';
-  gaugeChart.setOption({
-    series: [{
-      type: 'gauge',
-      startAngle: 200, endAngle: -20,
-      min: 0, max: 100, radius: '88%',
-      progress: { show: true, width: 12, itemStyle: { color } },
-      axisLine: { lineStyle: { width: 12, color: [[1, '#30363d']] } },
-      axisTick: { show: false }, splitLine: { show: false },
-      axisLabel: { show: false }, pointer: { show: false }, anchor: { show: false },
-      detail: {
-        valueAnimation: true, fontSize: 32, fontWeight: 700,
-        color: '#e6edf3', formatter: '{value}', offsetCenter: [0, '10%'],
-      },
-      title: { show: true, offsetCenter: [0, '38%'], color: '#8b949e', fontSize: 10,
-               formatter: 'out of 100' },
-      data: [{ value: score, name: 'out of 100' }],
-    }],
-  });
-}
-
-// ══ Clear ══════════════════════════════════════════════════════════════════
-function clearDashboard() {
-  if (!confirm('Clear all loaded results?')) return;
-  stopLivePolling();
-  lastResponseCount = -1;
-  ['statTotal','statRate','statScore','statPriority','statPriorityPct'].forEach(id => {
-    document.getElementById(id).textContent = '—';
-  });
-  document.getElementById('statExpected').textContent = '—';
-  document.getElementById('scoreBadge').innerHTML = '';
-  document.getElementById('responseCount').textContent = '0 responses loaded';
-  document.getElementById('statusDot').className = 'status-dot waiting';
-  document.getElementById('statusDot').textContent = 'WAITING';
-  [1,2,3,4].forEach(i => setDimBar(i, 0));
-  updateGauge(0);
-  radarChart.setOption({ series: [{ data: [{ value: [0,0,0,0] }] }] });
-  priorityChart.setOption({ series: [{ data: [0,0,0,0,0] }] });
-  document.getElementById('pasteArea').value = '';
-  document.getElementById('pasteError').classList.remove('show');
-  showOverlay();
-}
-
-// ══ Microsoft Forms URL — hardcoded ════════════════════════════════════════
-const FORMS_URL = 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=V3D2_MlQ1EqY8__KZK3Z6WGbPTmZByxJlQFVsxJkyLZUQTJPUE9JNjROWkZJWDlPU0wwUlhCSlkyTC4u';
-
-// ══ Sync overlay expected input → hidden admin input ═══════════════════════
-// Both inputs control the same value; overlay one is always visible,
-// admin bar one updates automatically so updateDashboard() reads correctly.
-document.addEventListener('DOMContentLoaded', () => {
-  const overlayInput = document.getElementById('expectedInputOverlay');
-  const adminInput   = document.getElementById('expectedInput');
-  overlayInput.addEventListener('input', () => {
-    adminInput.value = overlayInput.value;
-  });
-  adminInput.addEventListener('input', () => {
-    overlayInput.value = adminInput.value;
-  });
-});
-
-// ══ QR helper — uses qrcodejs constructor (browser-native, no Node.js) ════
-function makeQR(elementId, size) {
-  // qrcodejs renders into a container div/element directly
-  const el = document.getElementById(elementId);
-  if (!el) return;
-  // Use a temporary hidden div as render target, then extract the canvas/img
-  const tmp = document.createElement('div');
-  tmp.style.display = 'none';
-  document.body.appendChild(tmp);
-  const qr = new QRCode(tmp, {
-    text: FORMS_URL,
-    width: size,
-    height: size,
-    colorDark: '#000000',
-    colorLight: '#ffffff',
-    correctLevel: QRCode.CorrectLevel.M
-  });
-  // qrcodejs creates an <img> inside the container
-  setTimeout(() => {
-    const img = tmp.querySelector('img');
-    if (img && img.src) {
-      el.src = img.src;
+  // Lowest-rated area that few people chose as a priority
+  const rated = RATING_KEYS.filter(k => sum(counts[k])).map(k => ({ k, avg: ratingStats(counts[k]).avg }))
+                           .sort((a, b) => a.avg - b.avg);
+  if (rated.length) {
+    const low = rated[0], pr = PRIORITIES.find(p => p.dim === low.k), share = ranked.find(r => r.p === pr).pct;
+    if (low.avg < 3 && share <= 10 && pr !== top.p) {
+      items.push({ cls: 'note', html: `<strong>Worth keeping in view.</strong> ${qLabel(low.k)} is among the lower-rated questions (${low.avg.toFixed(1)}), while only ${share}% chose the related priority.` });
+      themes.push(`Keeping ${pr.short} in view alongside the stated priorities, as it may influence progress elsewhere`);
     }
-    document.body.removeChild(tmp);
-  }, 100);
+  }
+  if (n < 10) items.push(sampleNote(n));
+  return { items, themes };
 }
 
-// ══ Init ═══════════════════════════════════════════════════════════════════
-window.addEventListener('load', () => {
+// ══ Cross-question themes, headline and areas to explore ═════════════════════
+function crossInsights() {
+  const items = [];
+  const st = {}; RATING_KEYS.forEach(k => st[k] = ratingStats(counts[k]));
+  const have = RATING_KEYS.filter(k => st[k].n);
+  // The AI / data / security comparisons below only make sense while the original questions are unchanged
+  const topicRules = RATING_KEYS.every(k => RATINGS[k].text === DEFAULT_RATINGS[k].text);
+  const p = prioStats();
 
-  // Generate all three QR codes from the same Forms URL
-  makeQR('qrImg', 200);        // large — client view
-  makeQR('qrImgSmall', 80);    // small — operator panel
-  makeQR('qrImgTopbar', 48);   // tiny  — topbar on live dashboard
+  if (have.length >= 2) {
+    const sorted = have.slice().sort((a, b) => st[a].avg - st[b].avg);
+    const lo = sorted[0], hi = sorted[sorted.length - 1];
+    items.push({ cls: '', html: `<strong>Highest rated:</strong> ${qLabel(hi)} (${st[hi].avg.toFixed(1)}). <strong>Most room to grow:</strong> ${qLabel(lo)} (${st[lo].avg.toFixed(1)}).` });
+    if (st[hi].avg - st[lo].avg >= 1) {
+      items.push({ cls: 'note', html: `<strong>Progress varies across areas.</strong> There is a ${(st[hi].avg - st[lo].avg).toFixed(1)}-point difference between the highest and lowest rated areas, and the lowest may influence how quickly the others can advance.` });
+    }
+    if (p.n) {
+      const top = p.ranked[0].p;
+      if (top.dim === lo) items.push({ cls: 'good', html: `<strong>Aligned view.</strong> The lowest-rated area and the top priority are the same (${top.short}), giving a clear shared direction.` });
+      else if (top.dim) items.push({ cls: '', html: `<strong>Different signals.</strong> The lowest-rated is ${qLabel(lo)}, while the top priority is ${top.short}. Both are worth considering.` });
+      else items.push({ cls: '', html: `<strong>Top priority is ${top.short}</strong> rather than a specific rated question. The lowest-rated is ${qLabel(lo)}.` });
+    }
+  }
+  if (topicRules && st.q3.n && st.q4.n) {
+    if (st.q3.avg - st.q4.avg >= 0.5) {
+      items.push({ cls: 'note', html: `<strong>AI is moving ahead of data.</strong> AI adoption (${st.q3.avg.toFixed(1)}) is rated above data access (${st.q4.avg.toFixed(1)}). Data foundations are commonly a key factor in scaling the value of AI.` });
+    } else if (st.q3.avg < 3 && st.q4.avg < 3) {
+      items.push({ cls: 'note', html: `<strong>Data and AI are both at an early stage.</strong> Strengthening data access is a common first step towards AI value.` });
+    } else if (st.q4.avg - st.q3.avg >= 0.5) {
+      items.push({ cls: 'good', html: `<strong>Data is ahead of AI.</strong> Data access (${st.q4.avg.toFixed(1)}) is rated above AI adoption (${st.q3.avg.toFixed(1)}), so the foundation is in place to move AI forward faster.` });
+    }
+  }
+  if (topicRules && st.q1.n && st.q2.n && st.q1.avg < 2.5 && st.q2.avg < 2.5) {
+    items.push({ cls: 'note', html: `<strong>Foundations are a shared theme.</strong> Infrastructure and security are both in the lower range, and a stable foundation typically supports later AI and data initiatives.` });
+  } else if (topicRules && st.q2.n && st.q3.n && st.q3.avg >= 3 && st.q2.avg < 3) {
+    items.push({ cls: 'note', html: `<strong>Governance alongside adoption.</strong> AI adoption (${st.q3.avg.toFixed(1)}) is rated above security confidence (${st.q2.avg.toFixed(1)}), so maturing governance in step with adoption is a common theme.` });
+  }
+  return items;
+}
 
-  // Set clickable URL link in client view (display is hidden; href still set for operator panel)
-  const linkEl = document.getElementById('qrLinkDisplay');
-  linkEl.textContent = FORMS_URL;
-  linkEl.href = FORMS_URL;
-  document.getElementById('qrLinkSmall').textContent = FORMS_URL;
+function summaryHeadline() {
+  const have = RATING_KEYS.filter(k => sum(counts[k]));
+  const p = prioStats(), parts = [];
+  const overall = overallScore();
+  if (overall === null && have.length) parts.push(`${have.length} of 4 ratings are in so far.`);
+  if (have.length >= 2) {
+    const lo = have.slice().sort((a, b) => ratingStats(counts[a]).avg - ratingStats(counts[b]).avg)[0];
+    parts.push(`The largest opportunity is <strong>${qLabel(lo)}</strong> (${ratingStats(counts[lo]).avg.toFixed(1)}/5).`);
+  }
+  if (p.n) parts.push(`The top priority is <strong>${p.ranked[0].p.short}</strong> (${p.ranked[0].pct}%).`);
+  return parts.join(' ');
+}
 
-  // Check Gist connectivity and update operator panel status
-  checkGistOnLoad();
-
-  initCharts();
-  window.addEventListener('resize', () => {
-    radarChart    && radarChart.resize();
-    priorityChart && priorityChart.resize();
-    gaugeChart    && gaugeChart.resize();
+// Combine measured rating (60%) with stated priority (40%) to rank the areas to explore
+function focusAreas() {
+  const p = prioStats(), list = [];
+  PRIORITIES.forEach((pr, i) => {
+    const share = p.n ? counts.q5[i] / p.n : 0;
+    if (pr.dim) {
+      const s = ratingStats(counts[pr.dim]);
+      if (!s.n && !share) return;
+      const need = s.n ? (5 - s.avg) / 4 : 0;
+      const why = [];
+      if (s.n) why.push(`rated ${s.avg.toFixed(1)}/5 (${bandLabel[band(s.avg)]})`);
+      if (p.n) why.push(`${Math.round(share * 100)}% chose it as their top priority`);
+      const acts = s.n ? RATINGS[pr.dim].themes[band(s.avg)].slice(0, 2) : pr.themes.slice(0, 2);
+      list.push({ name: pr.short, score: need * 0.6 + share * 0.4, why: why.join(' · '), acts });
+    } else if (share >= 0.2) {
+      list.push({ name: pr.short, score: share, why: `${Math.round(share * 100)}% chose it as their top priority`, acts: pr.themes.slice(0, 3) });
+    }
   });
-});
+  return list.sort((a, b) => b.score - a.score).slice(0, 3);
+}
+
+// ══ Chart helpers (inline SVG / CSS, no external libraries) ══════════════════
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// Semicircle gauge: average rating on a 1–5 scale
+function gauge(s) {
+  const frac = s.n ? (s.avg - 1) / 4 : 0;
+  const color = s.n ? bandColor[band(s.avg)] : '#30363d';
+  const arc = 'M20 100 A80 80 0 0 1 180 100';
+  return `<svg viewBox="0 0 200 125" xmlns="http://www.w3.org/2000/svg">
+    <path d="${arc}" pathLength="100" fill="none" stroke="#30363d" stroke-width="16" stroke-linecap="round"/>
+    ${s.n ? `<path d="${arc}" pathLength="100" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round" stroke-dasharray="${Math.max(frac * 100, 0.5)} 100"/>` : ''}
+    <text x="100" y="90" text-anchor="middle" font-size="46" font-weight="700" fill="#e6edf3">${s.n ? s.avg.toFixed(1) : '—'}</text>
+    <text x="100" y="109" text-anchor="middle" font-size="13" fill="#8b949e">out of 5</text>
+    <text x="20" y="121" text-anchor="middle" font-size="13" fill="#8b949e">1</text>
+    <text x="180" y="121" text-anchor="middle" font-size="13" fill="#8b949e">5</text>
+  </svg>`;
+}
+
+// Stacked bar of lower (1–2) / middle (3) / higher (4–5) ratings
+function stack(s, tall) {
+  if (!s.n) return `<div class="stack ${tall ? 'tall' : ''}"></div>`;
+  const seg = (cls, v) => v ? `<div class="seg ${cls}" style="width:${v}%">${v >= 12 ? v + '%' : ''}</div>` : '';
+  return `<div class="stack ${tall ? 'tall' : ''}">${seg('low', s.low)}${seg('mid', s.mid)}${seg('high', s.high)}</div>`;
+}
+const legend = `<div class="legend"><span><i class="low"></i>Rated 1–2</span><span><i class="mid"></i>Rated 3</span><span><i class="high"></i>Rated 4–5</span></div>`;
+
+// Donut of priority votes
+function donut(vals) {
+  const n = sum(vals);
+  let cum = 0;
+  const segs = n ? vals.map((v, i) => {
+    const len = v / n * 100;
+    const el = len ? `<circle cx="60" cy="60" r="46" fill="none" stroke="${PCOL[i]}" stroke-width="16" pathLength="100" stroke-dasharray="${len} ${100 - len}" stroke-dashoffset="${-cum}" transform="rotate(-90 60 60)"/>` : '';
+    cum += len;
+    return el;
+  }).join('') : '';
+  return `<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg"><circle cx="60" cy="60" r="46" fill="none" stroke="#30363d" stroke-width="16"/>${segs}</svg>`;
+}
+
+// Radar of the four dimension averages (1–5 scale, centre = 0)
+function radar() {
+  const cx = 262, cy = 172, R = 92, ang = [-90, 0, 90, 180];
+  const names = RATING_KEYS.map(qLabel);
+  const avgs = RATING_KEYS.map(k => { const s = ratingStats(counts[k]); return s.n ? s.avg : 0; });
+  const pt = (k, v) => { const a = ang[k] * Math.PI / 180, r = R * v / 5; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const poly = vals => vals.map((v, k) => pt(k, v).map(x => x.toFixed(1)).join(',')).join(' ');
+  const rings = [1, 2, 3, 4, 5].map(l => `<polygon points="${poly([l, l, l, l])}" fill="none" stroke="#30363d" stroke-width="1"/>`).join('');
+  const axes = [0, 1, 2, 3].map(k => { const p = pt(k, 5); return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="#30363d" stroke-width="1"/>`; }).join('');
+  const dots = avgs.map((v, k) => v ? `<circle cx="${pt(k, v)[0].toFixed(1)}" cy="${pt(k, v)[1].toFixed(1)}" r="4.5" fill="#3b82d4"/>` : '').join('');
+  const lbl = (k, x, y, anchor) => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="19" fill="#8b949e">${esc(names[k])}</text>
+      <text x="${x}" y="${y + 24}" text-anchor="${anchor}" font-size="24" font-weight="700" fill="#e6edf3">${avgs[k] ? avgs[k].toFixed(1) : '—'}</text>`;
+  return `<svg viewBox="0 0 520 350" xmlns="http://www.w3.org/2000/svg">${rings}${axes}
+    <polygon points="${poly(avgs)}" fill="rgba(59,130,212,0.28)" stroke="#3b82d4" stroke-width="2.5" stroke-linejoin="round"/>${dots}
+    ${lbl(0, cx, cy - R - 38, 'middle')}${lbl(1, cx + R + 14, cy - 4, 'start')}${lbl(2, cx, cy + R + 28, 'middle')}${lbl(3, cx - R - 14, cy - 4, 'end')}
+  </svg>`;
+}
+
+// ══ Rendering ════════════════════════════════════════════════════════════════
+function renderTop() {
+  const tabs = ['q1','q2','q3','q4','q5','summary'];
+  document.getElementById('tabs').innerHTML = tabs.map(t => {
+    const label = t === 'summary' ? 'Summary' : t.toUpperCase();
+    const n = t === 'summary' ? '' : `<span class="n">n=${sum(counts[t])}</span>`;
+    return `<button class="tab ${t === current ? 'active' : ''}" onclick="go('${t}')">${label}${n}</button>`;
+  }).join('');
+  document.getElementById('ctrl').innerHTML =
+    `<button class="btn" onclick="toggleEdit()">${editMode ? 'Hide data entry' : 'Edit counts'}</button>` +
+    (editMode ? `<button class="btn" onclick="resetAll()">Reset</button>` : '') +
+    `<button class="btn" onclick="go('${current === 'admin' ? 'summary' : 'admin'}')">${current === 'admin' ? 'Close admin' : 'Admin'}</button>` +
+    `<button class="btn" onclick="toggleFS()">Full screen</button>`;
+}
+
+function insightList(items, max) {
+  if (!items.length) return '<div class="empty">Enter the counts to see insights.</div>';
+  return '<ul class="insights">' + items.slice(0, max || 6).map(i => `<li class="${i.cls}">${i.html}</li>`).join('') + '</ul>';
+}
+function tileRow(themes) {
+  if (!themes.length) return '<div class="empty">Enter the counts to see areas to explore.</div>';
+  return '<div class="tiles">' + themes.slice(0, 5).map(t => `<div class="tile">${esc(t)}</div>`).join('') + '</div>';
+}
+
+function renderRating(key) {
+  const d = RATINGS[key], arr = counts[key], s = ratingStats(arr), max = Math.max.apply(null, arr.concat([1]));
+  const ins = ratingInsights(key);
+  const b = s.n ? band(s.avg) : null;
+  const cols = arr.map((c, i) => {
+    const pct = s.n ? Math.round(c / s.n * 100) : 0;
+    const cls = i < 2 ? 'c-low' : i === 2 ? 'c-mid' : 'c-high';
+    const anchor = i === 0 ? esc(d.lo) : i === 4 ? esc(d.hi) : '';
+    return `<div class="col">
+      <div class="slot"><div class="plot"><div class="fill ${cls}" style="height:${c / max * 100}%"><div class="v"><b>${c}</b><span>${pct}%</span></div></div></div></div>
+      <div class="xl"><div class="rn">${i + 1}</div><div class="anc">${anchor}</div>
+        ${editMode ? `<input class="cnt" type="number" min="0" value="${c}" data-q="${key}" data-i="${i}" oninput="setCount(this)">` : ''}</div>
+    </div>`;
+  }).join('');
+  return `<div class="head"><div class="eyebrow">Question ${key.slice(1)}</div><div class="qtext">${esc(d.text)}</div></div>
+    <div class="grid3">
+      <div class="card"><h3>Response distribution</h3><div class="chart5">${cols}</div></div>
+      <div class="card"><h3>Average rating</h3>
+        <div class="gwrap">${gauge(s)}</div>
+        <div class="gbadge">${s.n ? `<span class="badge ${bandClass[b]}">${bandLabel[b]}</span>` : ''}</div>
+        <h3 style="margin-top:0.8rem;">Share of responses</h3>${stack(s)}${legend}
+        <div class="mini"><div><b>${s.n}</b><span>Responses</span></div><div><b>${s.n ? s.median : '—'}</b><span>Median rating</span></div></div>
+      </div>
+      <div class="card"><h3>Insights</h3>${insightList(ins.items, 5)}</div>
+    </div>
+    <div class="card"><h3>Areas to explore</h3>${tileRow(ins.themes)}</div>`;
+}
+
+function renderPriority() {
+  const { n, ranked } = prioStats();
+  const max = Math.max.apply(null, counts.q5.concat([1]));
+  const ins = prioInsights();
+  const rows = PRIORITIES.map((p, i) => {
+    const c = counts.q5[i], pct = n ? Math.round(c / n * 100) : 0;
+    return `<div class="hrow ${editMode ? '' : 'noin'}"><div class="hl"><b>${esc(p.short)}</b><small>${esc(p.label)}</small></div>
+      <div class="htrk"><div class="hfil" style="width:${c / max * 100}%;background:${PCOL[i]}"></div></div>
+      <div class="hv"><b>${c}</b><span>${pct}%</span></div>
+      ${editMode ? `<input class="cnt" style="width:4.5rem" type="number" min="0" value="${c}" data-q="q5" data-i="${i}" oninput="setCount(this)">` : ''}</div>`;
+  }).join('');
+  const top = n ? ranked[0] : null;
+  return `<div class="head"><div class="eyebrow">Question 5</div><div class="qtext">${esc(poll.q5Text)}</div></div>
+    <div class="grid3">
+      <div class="card"><h3>Votes by priority</h3><div class="hrows">${rows}</div></div>
+      <div class="card"><h3>Share of votes</h3>
+        <div class="dwrap">${donut(counts.q5)}<div class="dc"><b>${top ? top.pct + '%' : '—'}</b><span>top priority</span></div></div>
+        <div class="dname">${top ? esc(top.p.short) : '&nbsp;'}</div>
+        <div class="mini"><div><b>${n}</b><span>Responses</span></div><div><b>${top ? (ranked[0].pct - ranked[1].pct) + ' pts' : '—'}</b><span>Lead over #2</span></div></div>
+      </div>
+      <div class="card"><h3>Insights</h3>${insightList(ins.items, 5)}</div>
+    </div>
+    <div class="card"><h3>Areas to explore</h3>${tileRow(ins.themes)}</div>`;
+}
+
+function renderSummary() {
+  const head = summaryHeadline();
+  const overall = overallScore();
+  const { n, ranked } = prioStats();
+  const dimRows = RATING_KEYS.map(k => {
+    const s = ratingStats(counts[k]);
+    return `<div class="srow"><div class="sn">${qLabel(k)}</div>${stack(s, true)}<div class="sa">${s.n ? s.avg.toFixed(1) : '—'}</div></div>`;
+  }).join('');
+  const maxC = Math.max.apply(null, counts.q5.concat([1]));
+  const prioRows = ranked.map(r => `<div class="hrow noin" style="grid-template-columns:13rem 1fr 4.2rem;">
+      <div class="hl"><b>${esc(r.p.short)}</b></div>
+      <div class="htrk"><div class="hfil" style="width:${r.c / maxC * 100}%;background:${PCOL[r.i]}"></div></div>
+      <div class="hv"><b>${n ? r.pct + '%' : '—'}</b></div></div>`).join('');
+  const focus = focusAreas();
+  const focusHtml = focus.length
+    ? '<div class="focus-grid">' + focus.map((f, i) => `<div class="focus"><div class="focus-rank">Theme ${i + 1}</div><div class="focus-name">${esc(f.name)}</div>
+        <div class="focus-why">${esc(f.why)}</div><ul>${f.acts.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`).join('') + '</div>'
+    : '<div class="empty">Enter the counts to see areas to explore.</div>';
+  return `<div class="sum">
+    <div class="headline">
+      <div class="score"><b>${overall !== null ? overall : '—'}<small> /100</small></b><span>${overall !== null ? 'Overall readiness · ' + scoreTag(overall) : 'Overall readiness'}</span></div>
+      <div>${head || 'Enter the counts to build the summary.'}</div>
+    </div>
+    <div class="sum-top">
+      <div class="card"><h3>Readiness profile (average out of 5)</h3><div class="rwrap">${radar()}</div></div>
+      <div class="card"><h3>How the room rated each question</h3><div class="srows">${dimRows}</div>${legend}</div>
+      <div class="card"><h3>Top priority</h3><div class="hrows">${prioRows}</div></div>
+    </div>
+    <div class="sum-bot">
+      <div class="card"><h3>Key themes across the poll</h3>${insightList(crossInsights(), 5)}</div>
+      <div class="card"><h3>Areas to explore</h3>${focusHtml}</div>
+    </div>
+  </div>`;
+}
+
+// ── Event details and admin ──
+function fmtDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if (!m) return '';
+  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function evTitle() { return ev.title.trim() || 'Untitled event'; }
+
+// Updates every place the event name and date appear (header, browser tab, admin preview)
+function renderEvent() {
+  const d = fmtDate(ev.date);
+  document.getElementById('evTitle').textContent = evTitle();
+  document.getElementById('evDate').textContent = d;
+  document.title = evTitle() + (d ? ' – ' + d : '');
+  const pt = document.getElementById('pvT'), pd = document.getElementById('pvD');
+  if (pt) pt.textContent = evTitle();
+  if (pd) pd.textContent = d || 'No date set';
+}
+function setEvent(field, el) { ev[field] = el.value; save(); renderEvent(); }
+
+let adminQ = 'q1';
+function setAdminTab(t) { adminTab = t; render(); }
+function setAdminQ(k) { adminQ = k; render(); }
+
+// Edits write straight into the live poll definition and are saved. No re-render, so typing keeps its focus.
+function setPoll(el) {
+  const parts = el.dataset.p.split('.');
+  let o = poll;
+  for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+  o[parts[parts.length - 1]] = el.dataset.l ? el.value.split('\n').map(s => s.trim()).filter(Boolean) : el.value;
+  save();
+}
+function restoreWording() {
+  if (!confirm('Restore the original question wording? Your edits to the questions will be lost.')) return;
+  poll = clonePoll(); applyPoll(poll); save(); render();
+}
+function fld(label, path, val, kind, rows) {
+  const id = 'f_' + path.replace(/\./g, '_');
+  const input = kind === 'text'
+    ? `<input class="txt sm" id="${id}" type="text" value="${esc(val)}" data-p="${path}" oninput="setPoll(this)">`
+    : kind === 'list'
+    ? `<textarea class="txt sm" id="${id}" rows="${rows || 3}" data-p="${path}" data-l="1" oninput="setPoll(this)">${esc(val.join('\n'))}</textarea>`
+    : `<textarea class="txt sm" id="${id}" rows="${rows || 3}" data-p="${path}" oninput="setPoll(this)">${esc(val)}</textarea>`;
+  return `<div class="fld"><label for="${id}">${label}</label>${input}</div>`;
+}
+
+function renderQuestionEditor() {
+  const opts = ['q1','q2','q3','q4','q5'].map(k =>
+    `<button class="qopt ${k === adminQ ? 'on' : ''}" onclick="setAdminQ('${k}')"><b>Question ${k.slice(1)}</b></button>`).join('');
+  let body;
+  if (adminQ === 'q5') {
+    const optHtml = PRIORITIES.map((pr, i) => `<div class="optbox"><div class="optnum">Answer option ${i + 1}${pr.dim ? ' · linked to ' + pr.dim.toUpperCase() + ' rating' : ' · not linked to a rated question'}</div>
+        <div class="two">${fld('Short name (charts and headings)', 'priorities.' + i + '.short', pr.short, 'text')}
+        ${fld('Description shown to attendees', 'priorities.' + i + '.label', pr.label, 'text')}</div>
+        ${fld('Areas to explore if this is the top priority (one per line)', 'priorities.' + i + '.themes', pr.themes, 'list', 3)}
+        ${pr.dim ? '' : fld('Insight wording when this is the top priority', 'priorities.' + i + '.note', pr.note || '', 'area', 2)}</div>`).join('');
+    body = `<h3>Question 5 · Pick one priority</h3>${fld('Question', 'q5Text', poll.q5Text, 'area', 2)}${optHtml}`;
+  } else {
+    const r = RATINGS[adminQ], hint = { low: 'average under 2.5', mid: 'average 2.5 to 3.5', high: 'average over 3.5' };
+    const bands = ['low','mid','high'].map(b => `<div class="optbox"><div class="optnum">${bandLabel[b]} · ${hint[b]}</div>
+        ${fld('What the result says', 'ratings.' + adminQ + '.meaning.' + b, r.meaning[b], 'area', 3)}
+        ${fld('Areas to explore (one per line)', 'ratings.' + adminQ + '.themes.' + b, r.themes[b], 'list', 4)}</div>`).join('');
+    body = `<h3>Question ${adminQ.slice(1)} · Rating from 1 to 5</h3>${fld('Question', 'ratings.' + adminQ + '.text', r.text, 'area', 3)}
+      <div class="two">${fld('Label for 1 (lowest)', 'ratings.' + adminQ + '.lo', r.lo, 'text')}${fld('Label for 5 (highest)', 'ratings.' + adminQ + '.hi', r.hi, 'text')}</div>
+      <h3 style="margin-top:1rem;">What the insights say for each result</h3><div class="bands">${bands}</div>`;
+  }
+  return `<div class="qlayout">
+      <div class="card qside"><h3>Questions</h3>${opts}
+        <p class="hint">Changes save as you type and update every page and the PDF. The poll keeps 4 rating questions and 1 priority question.</p>
+        <button class="btn" onclick="restoreWording()">Restore original wording</button></div>
+      <div class="card qed">${body}</div>
+    </div>`;
+}
+
+function renderAdmin() {
+  const rows = ['q1','q2','q3','q4','q5'].map(k =>
+    `<div class="drow"><span>Question ${k.slice(1)}</span><b>${sum(counts[k])} responses</b></div>`).join('');
+  const sub = `<div class="subtabs"><button class="tab ${adminTab === 'event' ? 'active' : ''}" onclick="setAdminTab('event')">Event &amp; report</button>` +
+              `<button class="tab ${adminTab === 'questions' ? 'active' : ''}" onclick="setAdminTab('questions')">Questions</button></div>`;
+  const head = `<div class="head adm-head"><div><div class="eyebrow">Admin</div><div class="qtext">${adminTab === 'event' ? 'Event settings and report' : 'Edit the questions'}</div></div>${sub}</div>`;
+  if (adminTab === 'questions') return head + renderQuestionEditor();
+  return head + `<div class="adm">
+      <div class="card"><h3>Event details</h3>
+        <label for="fTitle">Event name / title</label>
+        <input class="txt" id="fTitle" type="text" value="${esc(ev.title)}" placeholder="e.g. Acme Strategy Day" oninput="setEvent('title', this)">
+        <label for="fDate">Event date</label>
+        <input class="txt" id="fDate" type="date" value="${esc(ev.date)}" oninput="setEvent('date', this)">
+        <h3 style="margin-top:1.1rem;">How it appears</h3>
+        <div class="prev"><b id="pvT"></b><span id="pvD"></span></div>
+      </div>
+      <div class="card"><h3>PDF report</h3>
+        <p>Creates a report with a cover page, the summary and one page for each question, headed with the event name and date.</p>
+        <p>Your browser's print window will open. Choose <b>Save as PDF</b> as the destination.</p>
+        <div><button class="btn big" onclick="exportPDF()">Export PDF</button></div>
+      </div>
+      <div class="card"><h3>Poll data</h3>${rows}
+        <div style="margin-top:1rem;"><button class="btn" onclick="resetAll()">Clear all counts</button></div>
+      </div>
+    </div>`;
+}
+// ── PDF report: one printed page per screen, with the event header on each ──
+function buildReport() {
+  const prevEdit = editMode;
+  editMode = false;   // never print the data-entry boxes
+  const t = esc(evTitle()), d = esc(fmtDate(ev.date));
+  const page = (label, body) => `<div class="rpage"><div class="topbar rhead">
+      <div class="ev"><h1>${t}</h1><div class="evdate">${d}</div></div><div class="rlabel">${label}</div></div>
+      <div class="main"><div class="panel">${body}</div></div></div>`;
+  const total = Math.max.apply(null, ['q1','q2','q3','q4','q5'].map(k => sum(counts[k])));
+  const cover = `<div class="rpage cover"><div class="cv-eyebrow">Readiness poll · Results</div>
+      <div class="cv-title">${t}</div><div class="cv-date">${d}</div>
+      <div class="cv-meta">${total} ${total === 1 ? 'response' : 'responses'} · 5 questions</div></div>`;
+  const html = cover + page('Summary', renderSummary()) +
+    RATING_KEYS.map(k => page('Question ' + k.slice(1), renderRating(k))).join('') +
+    page('Question 5', renderPriority());
+  editMode = prevEdit;
+  return html;
+}
+function exportPDF() {
+  document.getElementById('report').innerHTML = buildReport();
+  window.print();
+}
+window.addEventListener('afterprint', function () { document.getElementById('report').innerHTML = ''; });
+
+function render() {
+  renderTop();
+  renderEvent();
+  document.getElementById('panel').innerHTML =
+    current === 'admin' ? renderAdmin() :
+    current === 'q5' ? renderPriority() : current === 'summary' ? renderSummary() : renderRating(current);
+  renderEvent();   // second call fills the admin preview, which only exists after the panel is drawn
+}
+
+// ══ Interaction ══════════════════════════════════════════════════════════════
+function go(t) { current = t; render(); }
+function toggleEdit() { editMode = !editMode; render(); }
+function toggleFS() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function () {});
+  else document.exitFullscreen();
+}
+
+function setCount(el) {
+  const v = Math.max(0, parseInt(el.value) || 0);
+  counts[el.dataset.q][+el.dataset.i] = v;
+  save();
+  // Re-render but keep focus in the same input
+  const q = el.dataset.q, i = el.dataset.i;
+  render();
+  const again = document.querySelector(`input[data-q="${q}"][data-i="${i}"]`);
+  if (again) { again.focus(); again.select(); }
+}
+
+function resetAll() {
+  if (!confirm('Clear all entered counts?')) return;
+  Object.keys(counts).forEach(k => counts[k] = [0,0,0,0,0]);
+  save(); render();
+}
+
+render();
 </script>
 </body>
 </html>
